@@ -11,7 +11,8 @@
 #include "cloudfsapi.h"
 #include "config.h"
 
-#define CACHE_TIMEOUT 600
+int cache_timeout = 600;
+char authurl[MAX_URL_SIZE] = "https://api.mosso.com/auth";
 
 typedef struct dir_cache
 {
@@ -23,19 +24,6 @@ typedef struct dir_cache
 static dir_cache *dcache;
 static pthread_mutex_t dmut;
 static pthread_mutexattr_t dmattr;
-
-/*
-int hash_string(const char *data)
-{
-  uint32_t a = 1, b = 0;
-  for (; *data; data++)
-  {
-    a = (a + *(unsigned char *)data) % 65521;
-    b = (b + a) % 65521;
-  }
-  return ((b << 16) | a) % HASH_SIZE;
-}
-*/
 
 static int file_size(int fd)
 {
@@ -80,7 +68,7 @@ int caching_list_directory(const char *path, dir_entry **list)
       return  0;
     cw = new_cache(path);
   }
-  else if (time(NULL) - cw->cached > CACHE_TIMEOUT)
+  else if (cache_timeout > 0 && (time(NULL) - cw->cached > cache_timeout))
   {
     if (!list_directory(path, list))
       return  0;
@@ -225,7 +213,7 @@ static int cfs_fgetattr(const char *path, struct stat *stbuf, struct fuse_file_i
   if (info->fh)
   {
     stbuf->st_size = file_size(info->fh);
-    stbuf->st_mode = S_IFREG | 0444;
+    stbuf->st_mode = S_IFREG | 0666;
     stbuf->st_nlink = 1;
     return 0;
   }
@@ -361,6 +349,8 @@ int main(int argc, char **argv)
       {
         sscanf(line, " username = %[^\r\n ]", username);
         sscanf(line, " api_key = %[^\r\n ]", api_key);
+        sscanf(line, " cache_timeout = %d", &cache_timeout);
+        sscanf(line, " authurl = %[^\r\n ]", api_key);
       }
       fclose(settings);
     }
@@ -370,10 +360,13 @@ int main(int argc, char **argv)
     fprintf(stderr, "Unable to read %s\n", settings_filename);
     fprintf(stderr, "It should contain:\n\n");
     fprintf(stderr, "  username=[Mosso username]\n");
-    fprintf(stderr, "  api_key=[Mosso api key]\n");
+    fprintf(stderr, "  api_key=[Mosso api key]\n\n");
+    fprintf(stderr, "These entries are optional:\n\n");
+    fprintf(stderr, "  cache_timeout=[seconds for directory caching, default 600]\n");
+    fprintf(stderr, "  authurl=[authentication url, used mostly for testing]\n");
     return 1;
   }
-  if (!cloudfs_connect(username, api_key))
+  if (!cloudfs_connect(username, api_key, authurl))
   {
     fprintf(stderr, "Unable to authenticate.\n");
     return 1;

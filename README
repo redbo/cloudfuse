@@ -23,6 +23,10 @@ USE:
         username=[username]
         api_key=[api key]
 
+    The following settiongs are optional:
+        cache_timeout=[seconds for directory caching, default 600]
+        authurl=[authentication url, used mostly for testing]
+
     To run it, the syntax should be as simple as:
         cloudfuse [mount point]
 

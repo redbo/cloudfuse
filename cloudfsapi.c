@@ -14,8 +14,9 @@
 
 static char saved_username[MAX_HEADER_SIZE];
 static char saved_password[MAX_HEADER_SIZE];
-static char auth_url[MAX_HEADER_SIZE];
-char auth_token[MAX_HEADER_SIZE];
+static char saved_authurl[MAX_URL_SIZE];
+static char storage_url[MAX_HEADER_SIZE];
+char storage_token[MAX_HEADER_SIZE];
 static FILE *devnull = NULL;
 
 static CURL *curl_pool[1024];
@@ -141,9 +142,9 @@ static void feed_xml(struct dispatcher *d, char *data, int length)
 static void authentication_headers(struct dispatcher *d, char *header, char *val)
 {
   if (!strcasecmp(header, "x-auth-token"))
-    strncpy(auth_token, val, sizeof(auth_token));
+    strncpy(storage_token, val, sizeof(storage_token));
   if (!strcasecmp(header, "x-storage-url"))
-    strncpy(auth_url, val, sizeof(auth_url));
+    strncpy(storage_url, val, sizeof(storage_url));
 }
 
 static int send_request(char *method, curl_slist *headers, dispatcher *callback, const char *path)
@@ -157,22 +158,22 @@ static int send_request(char *method, curl_slist *headers, dispatcher *callback,
     *slash = '/';
     memmove(slash+1, slash+3, strlen(slash+3)+1);
   }
-  if (auth_url[0])
+  if (storage_url[0])
   {
     while (*path == '/')
       path++;
-    strncpy(url, auth_url, sizeof(url));
+    strncpy(url, storage_url, sizeof(url));
     strncat(url, "/", sizeof(url));
     strncat(url, path, sizeof(url));
   }
   else
     strncpy(url, path, sizeof(url));
 
-  if (auth_token[0])
+  if (storage_token[0])
   {
-    char auth_token_header[MAX_HEADER_SIZE];
-    snprintf(auth_token_header, sizeof(auth_token_header), "X-Auth-Token: %s", auth_token);
-    headers = curl_slist_append(headers, auth_token_header);
+    char storage_token_header[MAX_HEADER_SIZE];
+    snprintf(storage_token_header, sizeof(storage_token_header), "X-Auth-Token: %s", storage_token);
+    headers = curl_slist_append(headers, storage_token_header);
   }
 
   CURL *curl = get_curl_obj();
@@ -222,7 +223,7 @@ static int send_request(char *method, curl_slist *headers, dispatcher *callback,
   curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0);
   curl_easy_perform(curl);
   curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response);
-  if (response == 401 && cloudfs_connect(saved_username, saved_password))
+  if (response == 401 && cloudfs_connect(saved_username, saved_password, saved_authurl))
   {
     if (callback && callback->write_fp)
     {
@@ -408,7 +409,7 @@ int create_directory(const char *path)
   return (response >= 200 && response < 300);
 }
 
-int cloudfs_connect(char *username, char *password)
+int cloudfs_connect(char *username, char *password, char *authurl)
 {
   static int initialized = 0;
   struct curl_slist *headers = NULL;
@@ -420,6 +421,7 @@ int cloudfs_connect(char *username, char *password)
     LIBXML_TEST_VERSION
     strncpy(saved_username, username, sizeof(saved_username));
     strncpy(saved_password, password, sizeof(saved_password));
+    strncpy(saved_authurl, authurl, sizeof(saved_password));
     devnull = fopen("/dev/null", "r");
     initialized = 1;
   }
@@ -427,11 +429,11 @@ int cloudfs_connect(char *username, char *password)
   headers = curl_slist_append(headers, x_user);
   snprintf(x_pass, sizeof(x_pass), "X-Auth-Key: %s", password);
   headers = curl_slist_append(headers, x_pass);
-  auth_token[0] = auth_url[0] = '\0';
+  storage_token[0] = storage_url[0] = '\0';
   dispatcher *d = dispatch_init();
   d->header_callback = authentication_headers;
-  response = send_request("GET", headers, d, "https://api.mosso.com/auth");
+  response = send_request("GET", headers, d, authurl);
   dispatch_free(d);
-  return (response >= 200 && response < 300 && auth_token[0] && auth_url[0]);
+  return (response >= 200 && response < 300 && storage_token[0] && storage_url[0]);
 }
 
