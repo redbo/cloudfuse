@@ -7,7 +7,6 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include <sys/types.h>
-#include <malloc.h>
 #include <pthread.h>
 #include "cloudfsapi.h"
 #include "config.h"
