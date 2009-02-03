@@ -1,0 +1,51 @@
+Cloudfuse is a FUSE application which provides access to Mosso's Cloud Files.
+
+Cloud Files is a remote storage system which is similar in principle to
+Amazon's S3.  It provides a simple RESTful interface to storing and retrieving
+objects.
+
+    http://www.mosso.com/cloudfiles.jsp
+
+BUILDING:
+
+    You'll need libcurl, fuse, and libxml2 (and possibly their dev packages)
+    installed to build it.  It's built and installed like any other autoconf
+    configured code.  Normally,
+        ./configure
+        make
+        sudo make install
+
+    But I'm no autoconf wizard, and there may be dragons lurking there.
+
+USE:
+
+    You'll have to put your Mosso username and API key in $HOME/.cloudfuse
+        username=[username]
+        api_key=[api key]
+
+    To run it, the syntax should be as simple as:
+        cloudfuse [mount point]
+
+    It also inherits a number of command-line arguments from the fuse
+    framework.  The "-h" argument should provide a summary.
+
+    Your OS user will need access to the "fuse" group.  This can probably be
+    accomplished with:
+        sudo usermod -a -G fuse [username]
+
+BUGS/SHORTCOMINGS:
+
+    * When reading and writing files, it buffers them in a local temp file.
+    * It keeps an in-memory cache of the directory structure, so it may not be
+      usable for large file systems.  Also, files added by other applications
+      will not show up until the cache expires.
+    * The root directory can only contain directories, as these are mapped to
+      containers in cloudfiles.
+    * Directory entries are created as empty files with the content-type
+      "application/directory".
+
+Thanks, and I hope you find it useful.
+
+Michael Barton
+<mike@weirdlooking.com>
+
