@@ -332,12 +332,35 @@ static int cfs_truncate(const char *path, off_t size)
   return 0;
 }
 
+static int cfs_statfs(const char *path, struct statvfs *stat)
+{
+  stat->f_bsize = 2048;
+  stat->f_frsize = 2408;
+  stat->f_blocks = INT_MAX;
+  stat->f_bfree = stat->f_blocks;
+  stat->f_bavail = stat->f_blocks;
+  stat->f_files = INT_MAX;
+  stat->f_ffree = INT_MAX;
+  stat->f_favail = INT_MAX;
+  stat->f_namemax = INT_MAX;
+  return 0;
+}
+
+static int cfs_chown(const char *path, uid_t uid, gid_t gid)
+{
+  return 0;
+}
+
+static int cfs_chmod(const char *path, mode_t mode)
+{
+  return 0;
+}
+
 int main(int argc, char **argv)
 {
   char username[1024] = "", api_key[1024] = "";
   char *home, settings_filename[1024];
   FILE *settings;
-  struct fuse_operations cfs_oper;
 
   if ((home = getenv("HOME")))
   {
@@ -372,21 +395,25 @@ int main(int argc, char **argv)
     return 1;
   }
 
-  memset(&cfs_oper, 0, sizeof(cfs_oper));
-  cfs_oper.readdir = cfs_readdir;
-  cfs_oper.mkdir = cfs_mkdir;
-  cfs_oper.read = cfs_read;
-  cfs_oper.create = cfs_create;
-  cfs_oper.open = cfs_open;
-  cfs_oper.fgetattr = cfs_fgetattr;
-  cfs_oper.getattr = cfs_getattr;
-  cfs_oper.release = cfs_release;
-  cfs_oper.rmdir = cfs_rmdir;
-  cfs_oper.ftruncate = cfs_ftruncate;
-  cfs_oper.truncate = cfs_truncate;
-  cfs_oper.write = cfs_write;
-  cfs_oper.unlink = cfs_unlink;
-  cfs_oper.fsync = cfs_fsync;
+  static struct fuse_operations cfs_oper = {
+    .readdir = cfs_readdir,
+    .mkdir = cfs_mkdir,
+    .read = cfs_read,
+    .create = cfs_create,
+    .open = cfs_open,
+    .fgetattr = cfs_fgetattr,
+    .getattr = cfs_getattr,
+    .release = cfs_release,
+    .rmdir = cfs_rmdir,
+    .ftruncate = cfs_ftruncate,
+    .truncate = cfs_truncate,
+    .write = cfs_write,
+    .unlink = cfs_unlink,
+    .fsync = cfs_fsync,
+    .statfs = cfs_statfs,
+    .chmod = cfs_chmod,
+    .chown = cfs_chown,
+  };
 
   pthread_mutexattr_init(&dmattr);
   pthread_mutex_init(&dmut, &dmattr);
