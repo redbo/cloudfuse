@@ -193,6 +193,8 @@ static dir_entry *path_info(const char *path)
 
 static int cfs_getattr(const char *path, struct stat *stbuf)
 {
+  stbuf->st_uid = geteuid();
+  stbuf->st_gid = getegid();
   if (!strcmp(path, "/"))
   {
     stbuf->st_mode = S_IFDIR | 0755;
