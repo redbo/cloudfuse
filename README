@@ -47,6 +47,8 @@ BUGS/SHORTCOMINGS:
       containers in cloudfiles.
     * Directory entries are created as empty files with the content-type
       "application/directory".
+    * Cloud Files limits container and object listings to 10,000 items.
+      cloudfuse won't list more than this number of directories/files at once.
 
 Thanks, and I hope you find it useful.
 
