@@ -151,11 +151,18 @@ static int send_request(char *method, curl_slist *headers, dispatcher *callback,
   char url[MAX_URL_SIZE];
   int response = -1;
 
+  char *slash;
+  while ((slash = strcasestr(path, "%2F")))
+  {
+    *slash = '/';
+    memmove(slash+1, slash+3, strlen(slash+3)+1);
+  }
   if (auth_url[0])
   {
+    while (*path == '/')
+      path++;
     strncpy(url, auth_url, sizeof(url));
-    if (url[strlen(url)] != '/' && path[0] != '/')
-      strncat(url, "/", sizeof(url));
+    strncat(url, "/", sizeof(url));
     strncat(url, path, sizeof(url));
   }
   else
