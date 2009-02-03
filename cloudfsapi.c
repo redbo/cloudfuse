@@ -6,7 +6,6 @@
 #include <sys/stat.h>
 #include <alloca.h>
 #include <pthread.h>
-#include <printf.h>
 #include <time.h>
 #include <unistd.h>
 #include <sys/types.h>
@@ -147,39 +146,10 @@ static void authentication_headers(struct dispatcher *d, char *header, char *val
     strncpy(auth_url, val, sizeof(auth_url));
 }
 
-static int print_urlencode(FILE *stream, const struct printf_info *info, const void *const *args)
+static int send_request(char *method, curl_slist *headers, dispatcher *callback, const char *path)
 {
-  const char *string = *((const char **)(args[0]));
-  char *encoded = curl_escape(string, 0);
-  char *slash;
-  while ((slash = strcasestr(encoded, "%2F")))
-  {
-    *slash = '/';
-    memmove(slash+1, slash+3, strlen(slash+3)+1);
-  }
-  int len = strlen(encoded);
-  fwrite(encoded, len, 1, stream);
-  curl_free(encoded);
-  return len;
-}
-
-static int print_urlencode_arginfo(const struct printf_info *info, size_t n, int *argtypes)
-{
-  if (n > 0)
-    argtypes[0] = PA_STRING;
-  return 1;
-}
-
-static int send_request(char *method, curl_slist *headers, dispatcher *callback, char *fmt, ...)
-{
-  char path[MAX_URL_SIZE];
   char url[MAX_URL_SIZE];
   int response = -1;
-
-  va_list vargs;
-  va_start(vargs, fmt);
-  vsnprintf(path, sizeof(path), fmt, vargs);
-  va_end(vargs);
 
   if (auth_url[0])
   {
@@ -189,7 +159,7 @@ static int send_request(char *method, curl_slist *headers, dispatcher *callback,
     strncat(url, path, sizeof(url));
   }
   else
-    strncpy(url, fmt, sizeof(url));
+    strncpy(url, path, sizeof(url));
 
   if (auth_token[0])
   {
@@ -253,7 +223,7 @@ static int send_request(char *method, curl_slist *headers, dispatcher *callback,
       rewind(callback->write_fp);
       ftruncate(fileno(callback->write_fp), 0);
     }
-    return send_request(method, NULL, callback, "%s", path);
+    return send_request(method, NULL, callback, path);
   }
   curl_slist_free_all(headers);
   release_curl_obj(curl);
@@ -273,7 +243,9 @@ int object_read_from(const char *path, FILE *fp)
   dispatcher *d = dispatch_init();
   d->content_length = buf.st_size;
   d->read_fp = fp;
-  int response = send_request("PUT", NULL, d, "%W", path);
+  char *encoded = curl_escape(path, 0);
+  int response = send_request("PUT", NULL, d, encoded);
+  curl_free(encoded);
   dispatch_free(d);
   return (response >= 200 && response < 300);
 }
@@ -282,7 +254,9 @@ int object_write_to(const char *path, FILE *fp)
 {
   dispatcher *d = dispatch_init();
   d->write_fp = fp;
-  int response = send_request("GET", NULL, d, "%W", path);
+  char *encoded = curl_escape(path, 0);
+  int response = send_request("GET", NULL, d, encoded);
+  curl_free(encoded);
   dispatch_free(d);
   fflush(fp);
   if (response >= 200 && response < 300)
@@ -296,7 +270,9 @@ int object_truncate(const char *path)
 {
   dispatcher *d = dispatch_init();
   d->write_fp = devnull;
-  int response = send_request("GET", NULL, d, "%W", path);
+  char *encoded = curl_escape(path, 0);
+  int response = send_request("GET", NULL, d, encoded);
+  curl_free(encoded);
   dispatch_free(d);
   if (response >= 200 && response < 300)
     return 1;
@@ -305,7 +281,7 @@ int object_truncate(const char *path)
 
 int list_directory(const char *path, dir_entry **dir_list)
 {
-  char container[MAX_PATH_SIZE];
+  char container[MAX_PATH_SIZE * 3];
   char object[MAX_PATH_SIZE];
   int response = 0;
   dispatcher *d = dispatch_init();
@@ -337,7 +313,14 @@ int list_directory(const char *path, dir_entry **dir_list)
     strncpy(object, "", sizeof(object));
   d->xmlctx = xmlCreatePushParserCtxt(NULL, NULL, "", 0, NULL);
   d->data_callback = feed_xml;
-  response = send_request("GET", NULL, d, "%W?path=%W&format=xml", container, object);
+  char *encoded_container = curl_escape(container, 0);
+  char *encoded_object = curl_escape(object, 0);
+  strncpy(container, encoded_container, sizeof(container));
+  strncat(container, "?format=xml&path=", sizeof(container));
+  strncat(container, encoded_object, sizeof(container));
+  curl_free(encoded_container);
+  curl_free(encoded_object);
+  response = send_request("GET", NULL, d, container);
   xmlParseChunk(d->xmlctx, "", 0, 1);
   if (d->xmlctx->wellFormed && response >= 200 && response < 300)
   {
@@ -404,13 +387,17 @@ void free_dir_list(dir_entry *dir_list)
 
 int delete_object(const char *path)
 {
-  int response = send_request("DELETE", NULL, NULL, "%W", path);
+  char *encoded = curl_escape(path, 0);
+  int response = send_request("DELETE", NULL, NULL, encoded);
+  curl_free(encoded);
   return (response >= 200 && response < 300);
 }
 
 int create_directory(const char *path)
 {
-  int response = send_request("MKDIR", NULL, NULL, "%W", path);
+  char *encoded = curl_escape(path, 0);
+  int response = send_request("MKDIR", NULL, NULL, encoded);
+  curl_free(encoded);
   return (response >= 200 && response < 300);
 }
 
@@ -424,7 +411,6 @@ int cloudfs_connect(char *username, char *password)
   if (!initialized)
   {
     LIBXML_TEST_VERSION
-    register_printf_function ('W', print_urlencode, print_urlencode_arginfo);
     strncpy(saved_username, username, sizeof(saved_username));
     strncpy(saved_password, password, sizeof(saved_password));
     devnull = fopen("/dev/null", "r");
