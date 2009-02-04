@@ -8,6 +8,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <pthread.h>
+#include <pwd.h>
 #include "cloudfsapi.h"
 #include "config.h"
 
@@ -356,27 +357,36 @@ static int cfs_chmod(const char *path, mode_t mode)
   return 0;
 }
 
+char *get_home_dir()
+{
+  char *home;
+  struct passwd *pwd = getpwuid(geteuid());
+  if ((home = pwd->pw_dir) && !access(home, R_OK))
+    return home;
+  if ((home = getenv("HOME")) && !access(home, R_OK))
+    return home;
+  return "~";
+}
+
 int main(int argc, char **argv)
 {
-  char username[1024] = "", api_key[1024] = "";
-  char *home, settings_filename[1024];
+  char username[1024] = "", api_key[1024] = "", settings_filename[1024] = "";
   FILE *settings;
 
-  if ((home = getenv("HOME")))
+  char *home = get_home_dir();
+  snprintf(settings_filename, sizeof(settings_filename), "%s%s.cloudfuse",
+           home,  home[strlen(home)] == '/' ? "" : "/");
+  if ((settings = fopen(settings_filename, "r")))
   {
-    snprintf(settings_filename, sizeof(settings_filename), "%s/.cloudfuse", home);
-    if ((settings = fopen(settings_filename, "r")))
+    char line[1024];
+    while (fgets(line, sizeof(line), settings))
     {
-      char line[1024];
-      while (fgets(line, sizeof(line), settings))
-      {
-        sscanf(line, " username = %[^\r\n ]", username);
-        sscanf(line, " api_key = %[^\r\n ]", api_key);
-        sscanf(line, " cache_timeout = %d", &cache_timeout);
-        sscanf(line, " authurl = %[^\r\n ]", api_key);
-      }
-      fclose(settings);
+      sscanf(line, " username = %[^\r\n ]", username);
+      sscanf(line, " api_key = %[^\r\n ]", api_key);
+      sscanf(line, " cache_timeout = %d", &cache_timeout);
+      sscanf(line, " authurl = %[^\r\n ]", api_key);
     }
+    fclose(settings);
   }
   if (!*username || !*api_key)
   {
@@ -385,8 +395,8 @@ int main(int argc, char **argv)
     fprintf(stderr, "  username=[Mosso username]\n");
     fprintf(stderr, "  api_key=[Mosso api key]\n\n");
     fprintf(stderr, "These entries are optional:\n\n");
-    fprintf(stderr, "  cache_timeout=[seconds for directory caching, default 600]\n");
-    fprintf(stderr, "  authurl=[authentication url, used mostly for testing]\n");
+    fprintf(stderr, "  cache_timeout=[seconds for directory caching]\n");
+    fprintf(stderr, "  authurl=[used for testing]\n");
     return 1;
   }
   if (!cloudfs_connect(username, api_key, authurl))

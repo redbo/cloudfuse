@@ -4101,8 +4101,7 @@ fi
 
 
 
-
-for ac_header in malloc.h stdlib.h string.h unistd.h
+for ac_header in stdlib.h string.h unistd.h
 do
 as_ac_Header=`echo "ac_cv_header_$ac_header" | $as_tr_sh`
 if { as_var=$as_ac_Header; eval "test \"\${$as_var+set}\" = set"; }; then
@@ -4350,6 +4349,44 @@ if test $ac_cv_c_const = no; then
 
 cat >>confdefs.h <<\_ACEOF
 #define const
+_ACEOF
+
+fi
+
+{ echo "$as_me:$LINENO: checking for uid_t in sys/types.h" >&5
+echo $ECHO_N "checking for uid_t in sys/types.h... $ECHO_C" >&6; }
+if test "${ac_cv_type_uid_t+set}" = set; then
+  echo $ECHO_N "(cached) $ECHO_C" >&6
+else
+  cat >conftest.$ac_ext <<_ACEOF
+/* confdefs.h.  */
+_ACEOF
+cat confdefs.h >>conftest.$ac_ext
+cat >>conftest.$ac_ext <<_ACEOF
+/* end confdefs.h.  */
+#include <sys/types.h>
+
+_ACEOF
+if (eval "$ac_cpp conftest.$ac_ext") 2>&5 |
+  $EGREP "uid_t" >/dev/null 2>&1; then
+  ac_cv_type_uid_t=yes
+else
+  ac_cv_type_uid_t=no
+fi
+rm -f conftest*
+
+fi
+{ echo "$as_me:$LINENO: result: $ac_cv_type_uid_t" >&5
+echo "${ECHO_T}$ac_cv_type_uid_t" >&6; }
+if test $ac_cv_type_uid_t = no; then
+
+cat >>confdefs.h <<\_ACEOF
+#define uid_t int
+_ACEOF
+
+
+cat >>confdefs.h <<\_ACEOF
+#define gid_t int
 _ACEOF
 
 fi
@@ -5422,8 +5459,7 @@ fi
 
 
 
-
-for ac_func in ftruncate memchr memmove memset strcasecmp strchr strdup strrchr
+for ac_func in ftruncate memchr memmove strcasecmp strchr strdup strrchr
 do
 as_ac_var=`echo "ac_cv_func_$ac_func" | $as_tr_sh`
 { echo "$as_me:$LINENO: checking for $ac_func" >&5

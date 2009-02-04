@@ -21,10 +21,11 @@ AC_CHECK_LIB([xml2], [main])
 # Checks for header files.
 AC_FUNC_ALLOCA
 AC_HEADER_STDC
-AC_CHECK_HEADERS([malloc.h stdlib.h string.h unistd.h])
+AC_CHECK_HEADERS([stdlib.h string.h unistd.h])
 
 # Checks for typedefs, structures, and compiler characteristics.
 AC_C_CONST
+AC_TYPE_UID_T
 AC_TYPE_MODE_T
 AC_TYPE_OFF_T
 AC_TYPE_SIZE_T
@@ -33,7 +34,7 @@ AC_STRUCT_TM
 # Checks for library functions.
 AC_FUNC_MALLOC
 AC_FUNC_MKTIME
-AC_CHECK_FUNCS([ftruncate memchr memmove memset strcasecmp strchr strdup strrchr])
+AC_CHECK_FUNCS([ftruncate memchr memmove strcasecmp strchr strdup strrchr])
 
 AC_CONFIG_FILES([Makefile])
 AC_OUTPUT

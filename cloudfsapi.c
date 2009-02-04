@@ -12,11 +12,11 @@
 #include "cloudfsapi.h"
 #include "config.h"
 
+static char saved_authurl[MAX_URL_SIZE];
+static char storage_url[MAX_URL_SIZE];
 static char saved_username[MAX_HEADER_SIZE];
 static char saved_password[MAX_HEADER_SIZE];
-static char saved_authurl[MAX_URL_SIZE];
-static char storage_url[MAX_HEADER_SIZE];
-char storage_token[MAX_HEADER_SIZE];
+static char storage_token[MAX_HEADER_SIZE];
 static FILE *devnull = NULL;
 
 static CURL *curl_pool[1024];
@@ -98,6 +98,12 @@ static void dispatch_clear(dispatcher *d)
   if (d->buffer)
     free(d->buffer);
   d->buffer = NULL;
+  if (d->write_fp)
+  {
+    fflush(d->write_fp);
+    rewind(d->write_fp);
+    ftruncate(fileno(d->write_fp), 0);
+  }
 }
 
 static size_t header_dispatch(void *ptr, size_t size, size_t nmemb, void *stream)
@@ -243,13 +249,8 @@ static int send_request(char *method, curl_slist *headers, dispatcher *callback,
   curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response);
   if (response == 401 && cloudfs_connect(saved_username, saved_password, saved_authurl))
   {
-    dispatch_clear(callback);
-    if (callback && callback->write_fp)
-    {
-      fflush(callback->write_fp);
-      rewind(callback->write_fp);
-      ftruncate(fileno(callback->write_fp), 0);
-    }
+    if (callback)
+      dispatch_clear(callback);
     return send_request(method, NULL, callback, path);
   }
   curl_slist_free_all(headers);
