@@ -82,6 +82,24 @@ static void dispatch_free(dispatcher *d)
   free(d);
 }
 
+static void dispatch_clear(dispatcher *d)
+{
+  d->content_length = 0;
+  d->buffer_len = 0;
+  if (d->xmlctx)
+  {
+    xmlFreeDoc(d->xmlctx->myDoc);
+    xmlFreeParserCtxt(d->xmlctx);
+    d->xmlctx = xmlCreatePushParserCtxt(NULL, NULL, "", 0, NULL);
+  }
+  if (d->list)
+    curl_slist_free_all(d->list);
+  d->list = NULL;
+  if (d->buffer)
+    free(d->buffer);
+  d->buffer = NULL;
+}
+
 static size_t header_dispatch(void *ptr, size_t size, size_t nmemb, void *stream)
 {
   char *header = (char *)alloca(size * nmemb + 1);
@@ -225,6 +243,7 @@ static int send_request(char *method, curl_slist *headers, dispatcher *callback,
   curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response);
   if (response == 401 && cloudfs_connect(saved_username, saved_password, saved_authurl))
   {
+    dispatch_clear(callback);
     if (callback && callback->write_fp)
     {
       fflush(callback->write_fp);
