@@ -60,10 +60,6 @@ static dispatcher *dispatch_init()
   d->write_fp = NULL;
   d->read_fp = NULL;
   d->content_length = 0;
-  d->buffer = NULL;
-  d->buffer_size = 2048;
-  d->buffer_len = 0;
-  d->list = NULL;
   d->xmlctx = NULL;
   return d;
 }
@@ -75,29 +71,18 @@ static void dispatch_free(dispatcher *d)
     xmlFreeDoc(d->xmlctx->myDoc);
     xmlFreeParserCtxt(d->xmlctx);
   }
-  if (d->list)
-    curl_slist_free_all(d->list);
-  if (d->buffer)
-    free(d->buffer);
   free(d);
 }
 
 static void dispatch_clear(dispatcher *d)
 {
   d->content_length = 0;
-  d->buffer_len = 0;
   if (d->xmlctx)
   {
     xmlFreeDoc(d->xmlctx->myDoc);
     xmlFreeParserCtxt(d->xmlctx);
     d->xmlctx = xmlCreatePushParserCtxt(NULL, NULL, "", 0, NULL);
   }
-  if (d->list)
-    curl_slist_free_all(d->list);
-  d->list = NULL;
-  if (d->buffer)
-    free(d->buffer);
-  d->buffer = NULL;
   if (d->write_fp)
   {
     fflush(d->write_fp);
@@ -128,34 +113,6 @@ static size_t data_dispatch(void *ptr, size_t size, size_t nmemb, void *stream)
   if (d && d->data_callback)
     d->data_callback(d, (char *)ptr, size * nmemb);
   return size * nmemb;
-}
-
-static void newline_split(struct dispatcher *d, char *data, int length)
-{
-  while (!d->buffer || (d->buffer_len + length) > d->buffer_size)
-  {
-    char *newbuf = (char *)malloc(d->buffer_size *= 2), *oldbuf = d->buffer;
-    memcpy(newbuf, oldbuf, d->buffer_len);
-    if (oldbuf)
-      free(oldbuf);
-    d->buffer = newbuf;
-  }
-  memcpy(&d->buffer[d->buffer_len], data, length);
-  d->buffer_len += length;
-  char *line_break;
-  while ((line_break = (char *)memchr(d->buffer, '\n', d->buffer_len)))
-  {
-    int record_len = line_break - d->buffer;
-    char *label = (char *)alloca(record_len + 1);
-    sscanf(d->buffer, "%[^\n\r]", label);
-    while (*label <= ' ')
-      label++;
-    while (*label && label[strlen(label) - 1] <= ' ')
-      label[strlen(label) - 1] = 0;
-    if (label[0])
-      d->list = curl_slist_append(d->list, label);
-    memmove(d->buffer, line_break + 1, d->buffer_len -= record_len + 1);
-  }
 }
 
 static void feed_xml(struct dispatcher *d, char *data, int length)
@@ -309,55 +266,44 @@ int object_truncate(const char *path)
 
 int list_directory(const char *path, dir_entry **dir_list)
 {
-  char container[MAX_PATH_SIZE * 3];
-  char object[MAX_PATH_SIZE];
+  char container[MAX_PATH_SIZE * 3] = "";
+  char object[MAX_PATH_SIZE] = "";
   int response = 0;
   dispatcher *d = dispatch_init();
   *dir_list = NULL;
-  if (!strcmp(path, "") || !strcmp(path, "/"))
-  {
-    d->list = NULL;
-    d->data_callback = newline_split;
-    response = send_request("GET", NULL, d, "/");
-    if (response < 200 || response >= 300)
-      return 0;
-    curl_slist *tmp;
-    for (tmp = d->list; tmp; tmp = tmp->next)
-    {
-      dir_entry *de = (dir_entry *)malloc(sizeof(dir_entry));
-      de->name = strdup(tmp->data);
-      asprintf(&(de->full_name), "/%s", de->name);
-      de->content_type = strdup("application/directory");
-      de->size = 0;
-      de->last_modified = time(NULL);
-      de->isdir = 1;
-      de->next = *dir_list;
-      *dir_list = de;
-    }
-    dispatch_free(d);
-    return 1;
-  }
-  if (sscanf(path, "/%[^/]/%[^\n]", container, object) == 1)
-    strncpy(object, "", sizeof(object));
+  xmlNode *onode = NULL, *anode = NULL, *text_node = NULL;
   d->xmlctx = xmlCreatePushParserCtxt(NULL, NULL, "", 0, NULL);
   d->data_callback = feed_xml;
-  char *encoded_container = curl_escape(container, 0);
-  char *encoded_object = curl_escape(object, 0);
-  strncpy(container, encoded_container, sizeof(container));
-  strncat(container, "?format=xml&path=", sizeof(container));
-  strncat(container, encoded_object, sizeof(container));
-  curl_free(encoded_container);
-  curl_free(encoded_object);
+  if (!strcmp(path, "") || !strcmp(path, "/"))
+  {
+    path = "";
+    strncpy(container, "/?format=xml", sizeof(container));
+  }
+  else
+  {
+    sscanf(path, "/%[^/]/%[^\n]", container, object);
+    char *encoded_container = curl_escape(container, 0);
+    char *encoded_object = curl_escape(object, 0);
+    strncpy(container, encoded_container, sizeof(container));
+    strncat(container, "?format=xml&path=", sizeof(container));
+    strncat(container, encoded_object, sizeof(container));
+    curl_free(encoded_container);
+    curl_free(encoded_object);
+  }
   response = send_request("GET", NULL, d, container);
   xmlParseChunk(d->xmlctx, "", 0, 1);
   if (d->xmlctx->wellFormed && response >= 200 && response < 300)
   {
     xmlNode *root_element = xmlDocGetRootElement(d->xmlctx->myDoc);
-    xmlNode *onode = NULL, *anode = NULL, *text_node = NULL;
     for (onode = root_element->children; onode; onode = onode->next)
-      if ((onode->type == XML_ELEMENT_NODE) && !strcasecmp((const char *)onode->name, "object"))
+      if ((onode->type == XML_ELEMENT_NODE) &&
+         (!strcasecmp((const char *)onode->name, "object") || !strcasecmp((const char *)onode->name, "container")))
       {
         dir_entry *de = (dir_entry *)malloc(sizeof(dir_entry));
+        de->size = 0;
+        de->last_modified = time(NULL);
+        if (!strcasecmp((const char *)onode->name, "container"))
+          de->content_type = strdup("application/directory");
         for (anode = onode->children; anode; anode = anode->next)
         {
           char *content = "<?!?>";

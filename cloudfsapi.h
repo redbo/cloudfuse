@@ -27,10 +27,6 @@ typedef struct dispatcher
   FILE *write_fp;
   FILE *read_fp;
   int content_length;
-  char *buffer;
-  int buffer_size;
-  int buffer_len;
-  curl_slist *list;
   xmlParserCtxtPtr xmlctx;
 } dispatcher;
 
