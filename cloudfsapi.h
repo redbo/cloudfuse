@@ -4,10 +4,6 @@
 #include <curl/curl.h>
 #include <curl/types.h>
 #include <curl/easy.h>
-#include <libxml/tree.h>
-#include <libxml/parser.h>
-#include <libxml/xpath.h>
-#include <libxml/xpathInternals.h>
 
 #if !defined(DEBUG)
 #define DEBUG 0
@@ -19,16 +15,6 @@
 #define USER_AGENT "CloudFuse"
 
 typedef struct curl_slist curl_slist;
-
-typedef struct dispatcher
-{
-  void (*header_callback)(struct dispatcher *, char *, char *);
-  void (*data_callback)(struct dispatcher *, char *, int);
-  FILE *write_fp;
-  FILE *read_fp;
-  int content_length;
-  xmlParserCtxtPtr xmlctx;
-} dispatcher;
 
 typedef struct dir_entry
 {

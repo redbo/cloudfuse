@@ -255,10 +255,19 @@ static int cfs_create(const char *path, mode_t mode, struct fuse_file_info *info
 
 static int cfs_open(const char *path, struct fuse_file_info *info)
 {
-  cfs_create(path, info->flags, info);
-  FILE *tmp = fdopen(dup(info->fh), "w");
-  object_write_to(path, tmp);
-  fclose(tmp);
+  FILE *temp_file = tmpfile();
+  if (!(info->flags & O_WRONLY))
+  {
+    if (!object_write_to(path, temp_file))
+    {
+      fclose(temp_file);
+      return -ENOENT;
+    }
+    update_dir_cache(path, 0, 0);
+  }
+  info->fh = dup(fileno(temp_file));
+  info->direct_io = 1;
+  fclose(temp_file);
   return 0;
 }
 

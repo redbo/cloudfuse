@@ -1,4 +1,3 @@
-#define _GNU_SOURCE // for strcasestr
 #include <stdio.h>
 #include <string.h>
 #include <stdarg.h>
@@ -9,6 +8,7 @@
 #include <time.h>
 #include <unistd.h>
 #include <sys/types.h>
+#include <libxml/tree.h>
 #include "cloudfsapi.h"
 #include "config.h"
 
@@ -18,45 +18,20 @@ static char saved_username[MAX_HEADER_SIZE];
 static char saved_password[MAX_HEADER_SIZE];
 static char storage_token[MAX_HEADER_SIZE];
 static FILE *devnull = NULL;
+static pthread_mutex_t pool_mut;
+static pthread_mutexattr_t pool_matter;
 
-static CURL *curl_pool[1024];
-static int curl_pool_count;
-static pthread_mutex_t mut;
-static pthread_mutexattr_t mattr;
-static CURL *get_curl_obj()
+typedef struct dispatcher
 {
-  static int initialized = 0;
-  if (!initialized)
-  {
-    curl_pool_count = 0;
-    curl_global_init(CURL_GLOBAL_ALL);
-    pthread_mutexattr_init(&mattr);
-    pthread_mutex_init(&mut, &mattr);
-    initialized = 1;
-  }
-  pthread_mutex_lock(&mut);
-  CURL *curl;
-  if (curl_pool_count == 0)
-    curl = curl_easy_init();
-  else
-    curl = curl_pool[--curl_pool_count];
-  pthread_mutex_unlock(&mut);
-  return curl;
-}
-
-static void release_curl_obj(CURL *curl)
-{
-  pthread_mutex_lock(&mut);
-  curl_easy_reset(curl);
-  curl_pool[curl_pool_count++] = curl;
-  pthread_mutex_unlock(&mut);
-}
+  FILE *write_fp;
+  FILE *read_fp;
+  int content_length;
+  xmlParserCtxtPtr xmlctx;
+} dispatcher;
 
 static dispatcher *dispatch_init()
 {
   dispatcher *d = (dispatcher *)malloc(sizeof(dispatcher));
-  d->header_callback = NULL;
-  d->data_callback = NULL;
   d->write_fp = NULL;
   d->read_fp = NULL;
   d->content_length = 0;
@@ -100,9 +75,10 @@ static size_t header_dispatch(void *ptr, size_t size, size_t nmemb, void *stream
   header[size * nmemb] = '\0';
   if (sscanf(header, "%[^:]: %[^\r\n]", head, value) == 2)
   {
-    dispatcher *d = (dispatcher *)stream;
-    if (d && d->header_callback)
-      d->header_callback(d, head, value);
+    if (!strcasecmp(head, "x-auth-token"))
+      strncpy(storage_token, value, sizeof(storage_token));
+    if (!strcasecmp(head, "x-storage-url"))
+      strncpy(storage_url, value, sizeof(storage_url));
   }
   return size * nmemb;
 }
@@ -110,31 +86,20 @@ static size_t header_dispatch(void *ptr, size_t size, size_t nmemb, void *stream
 static size_t data_dispatch(void *ptr, size_t size, size_t nmemb, void *stream)
 {
   dispatcher *d = (dispatcher *)stream;
-  if (d && d->data_callback)
-    d->data_callback(d, (char *)ptr, size * nmemb);
+  if (d && d->xmlctx)
+    xmlParseChunk(d->xmlctx, (char *)ptr, size * nmemb, 0);
   return size * nmemb;
-}
-
-static void feed_xml(struct dispatcher *d, char *data, int length)
-{
-  xmlParseChunk(d->xmlctx, data, length, 0);
-}
-
-static void authentication_headers(struct dispatcher *d, char *header, char *val)
-{
-  if (!strcasecmp(header, "x-auth-token"))
-    strncpy(storage_token, val, sizeof(storage_token));
-  if (!strcasecmp(header, "x-storage-url"))
-    strncpy(storage_url, val, sizeof(storage_url));
 }
 
 static int send_request(char *method, curl_slist *headers, dispatcher *callback, const char *path)
 {
+  static CURL *curl_pool[1024];
+  static int curl_pool_count = 0;
   char url[MAX_URL_SIZE];
   int response = -1;
 
   char *slash;
-  while ((slash = strcasestr(path, "%2F")))
+  while ((slash = strstr(path, "%2F")) || (slash = strstr(path, "%2f")))
   {
     *slash = '/';
     memmove(slash+1, slash+3, strlen(slash+3)+1);
@@ -157,7 +122,10 @@ static int send_request(char *method, curl_slist *headers, dispatcher *callback,
     headers = curl_slist_append(headers, storage_token_header);
   }
 
-  CURL *curl = get_curl_obj();
+  pthread_mutex_lock(&pool_mut);
+  CURL *curl = curl_pool_count ? curl_pool[--curl_pool_count] : curl_easy_init();
+  pthread_mutex_unlock(&pool_mut);
+
   if (!strcasecmp(method, "MKDIR"))
   {
     curl_easy_setopt(curl, CURLOPT_UPLOAD, 1);
@@ -211,7 +179,10 @@ static int send_request(char *method, curl_slist *headers, dispatcher *callback,
     return send_request(method, NULL, callback, path);
   }
   curl_slist_free_all(headers);
-  release_curl_obj(curl);
+  curl_easy_reset(curl);
+  pthread_mutex_lock(&pool_mut);
+  curl_pool[curl_pool_count++] = curl;
+  pthread_mutex_unlock(&pool_mut);
   return response;
 }
 
@@ -273,7 +244,6 @@ int list_directory(const char *path, dir_entry **dir_list)
   *dir_list = NULL;
   xmlNode *onode = NULL, *anode = NULL, *text_node = NULL;
   d->xmlctx = xmlCreatePushParserCtxt(NULL, NULL, "", 0, NULL);
-  d->data_callback = feed_xml;
   if (!strcmp(path, "") || !strcmp(path, "/"))
   {
     path = "";
@@ -335,8 +305,8 @@ int list_directory(const char *path, dir_entry **dir_list)
           }
         }
         de->isdir = de->content_type &&
-            ((strcasestr(de->content_type, "application/folder") != NULL) ||
-             (strcasestr(de->content_type, "application/directory") != NULL));
+            ((strstr(de->content_type, "application/folder") != NULL) ||
+             (strstr(de->content_type, "application/directory") != NULL));
         de->next = *dir_list;
         *dir_list = de;
       }
@@ -385,6 +355,9 @@ int cloudfs_connect(char *username, char *password, char *authurl)
   if (!initialized)
   {
     LIBXML_TEST_VERSION
+    curl_global_init(CURL_GLOBAL_ALL);
+    pthread_mutexattr_init(&pool_matter);
+    pthread_mutex_init(&pool_mut, &pool_matter);
     strncpy(saved_username, username, sizeof(saved_username));
     strncpy(saved_password, password, sizeof(saved_password));
     strncpy(saved_authurl, authurl, sizeof(saved_password));
@@ -397,7 +370,6 @@ int cloudfs_connect(char *username, char *password, char *authurl)
   headers = curl_slist_append(headers, x_pass);
   storage_token[0] = storage_url[0] = '\0';
   dispatcher *d = dispatch_init();
-  d->header_callback = authentication_headers;
   response = send_request("GET", headers, d, authurl);
   dispatch_free(d);
   return (response >= 200 && response < 300 && storage_token[0] && storage_url[0]);
