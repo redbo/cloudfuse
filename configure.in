@@ -34,7 +34,7 @@ AC_STRUCT_TM
 # Checks for library functions.
 AC_FUNC_MALLOC
 AC_FUNC_MKTIME
-AC_CHECK_FUNCS([ftruncate memchr memmove strcasecmp strchr strdup strrchr])
+AC_CHECK_FUNCS([ftruncate memmove strcasecmp strchr strdup strrchr strstr])
 
 AC_CONFIG_FILES([Makefile])
 AC_OUTPUT
