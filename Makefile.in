@@ -20,7 +20,7 @@ MISC=configure mkinstalldirs install-sh
 all: cloudfuse
 
 install: all
-	$(INSTALL) cloudfuse $(bindir)/clodufuse
+	$(INSTALL) cloudfuse $(bindir)/cloudfuse
 
 uninstall:
 	/bin/rm -f $(bindir)/cloudfuse
