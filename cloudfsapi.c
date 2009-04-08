@@ -172,7 +172,9 @@ static int send_request(char *method, curl_slist *headers, dispatcher *callback,
   curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0);
   curl_easy_perform(curl);
   curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response);
-  if (response == 401 && cloudfs_connect(saved_username, saved_password, saved_authurl))
+  if (response == 401 &&
+      storage_token[0] &&
+      cloudfs_connect(saved_username, saved_password, saved_authurl))
   {
     if (callback)
       dispatch_clear(callback);

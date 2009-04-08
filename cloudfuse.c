@@ -393,7 +393,7 @@ int main(int argc, char **argv)
       sscanf(line, " username = %[^\r\n ]", username);
       sscanf(line, " api_key = %[^\r\n ]", api_key);
       sscanf(line, " cache_timeout = %d", &cache_timeout);
-      sscanf(line, " authurl = %[^\r\n ]", api_key);
+      sscanf(line, " authurl = %[^\r\n ]", authurl);
     }
     fclose(settings);
   }
