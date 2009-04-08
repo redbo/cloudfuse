@@ -96,7 +96,7 @@ static int send_request(char *method, curl_slist *headers, dispatcher *callback,
   static CURL *curl_pool[1024];
   static int curl_pool_count = 0;
   char url[MAX_URL_SIZE];
-  int response = -1;
+  long response = -1;
 
   char *slash;
   while ((slash = strstr(path, "%2F")) || (slash = strstr(path, "%2f")))
