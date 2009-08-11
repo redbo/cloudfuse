@@ -24,7 +24,7 @@ static pthread_mutexattr_t pool_matter;
 
 #ifdef HAVE_LIBMAGIC
 #include <magic.h>
-magic_t magic_cookie;
+static magic_t magic_cookie;
 const char *file_content_type(FILE *fp)
 {
   const char *type = NULL;
@@ -400,15 +400,15 @@ int cloudfs_connect(char *username, char *password, char *authurl, int use_snet)
     pthread_mutex_init(&pool_mut, &pool_matter);
     strncpy(saved_username, username, sizeof(saved_username));
     strncpy(saved_password, password, sizeof(saved_password));
-    strncpy(saved_authurl, authurl, sizeof(saved_password));
+    strncpy(saved_authurl, authurl, sizeof(saved_authurl));
     devnull = fopen("/dev/null", "r");
-    initialized = 1;
     #ifdef HAVE_LIBMAGIC
     magic_cookie = magic_open(MAGIC_MIME_TYPE);
     magic_load(magic_cookie, NULL) ||
         magic_load(magic_cookie, "/usr/share/misc/magic") ||
         magic_load(magic_cookie, "/usr/share/file/magic");
     #endif
+    initialized = 1;
   }
   snet_rewrite = use_snet;
   snprintf(x_user, sizeof(x_user), "X-Auth-User: %s", username);
