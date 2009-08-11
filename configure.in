@@ -3,7 +3,7 @@
 
 AC_PREREQ(2.61)
 AC_INIT(FULL-PACKAGE-NAME, VERSION, BUG-REPORT-ADDRESS)
-AC_CONFIG_SRCDIR([cloudfsapi.h])
+AC_CONFIG_SRCDIR([cloudfuse.c])
 AC_CONFIG_HEADER([config.h])
 
 # Checks for programs.
@@ -15,6 +15,8 @@ AC_PROG_INSTALL
 AC_CHECK_LIB([curl], [main])
 # FIXME: Replace `main' with a function in `-lfuse':
 AC_CHECK_LIB([fuse], [main])
+# FIXME: Replace `main' with a function in `-lmagic':
+AC_CHECK_LIB([magic], [main])
 # FIXME: Replace `main' with a function in `-lxml2':
 AC_CHECK_LIB([xml2], [main])
 
@@ -34,7 +36,7 @@ AC_STRUCT_TM
 # Checks for library functions.
 AC_FUNC_MALLOC
 AC_FUNC_MKTIME
-AC_CHECK_FUNCS([ftruncate memmove strcasecmp strchr strdup strrchr strstr])
+AC_CHECK_FUNCS([ftruncate memmove strcasecmp strchr strdup strncasecmp strrchr strstr])
 
 AC_CONFIG_FILES([Makefile])
 AC_OUTPUT

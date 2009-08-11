@@ -9,8 +9,10 @@ objects.
 BUILDING:
 
     You'll need libcurl, fuse, and libxml2 (and possibly their dev packages)
-    installed to build it.  It's built and installed like any other autoconf
-    configured code.  Normally,
+    installed to build it.  If libmagic is available at compile time, it will
+    be used to automatically determine content-types.
+    Cloudfuse is built and installed like any other autoconf configured code.
+    Normally,
         ./configure
         make
         sudo make install
@@ -24,6 +26,7 @@ USE:
         api_key=[api key]
 
     The following settings are optional:
+        use_snet=[True to use snet for connections]
         cache_timeout=[seconds for directory caching, default 600]
         authurl=[authentication url, used mostly for testing]
 
@@ -48,10 +51,12 @@ BUGS/SHORTCOMINGS:
     * Directory entries are created as empty files with the content-type
       "application/directory".
     * Cloud Files limits container and object listings to 10,000 items.
-      cloudfuse won't list more than this number of directories/files at once.
+      cloudfuse won't list more than this number of directories/files.
     * Doesn't implement rename().  There's currently no good way to do this
       on the backend.  Unfortunately, this makes cloudfuse considerably less
       useful in Finder, as it expects to be able to rename a lot.
+    * If libmagic is not available or it can't determine the mimetype of a
+      file, "application/octet-stream" is used.
 
 Thanks, and I hope you find it useful.
 

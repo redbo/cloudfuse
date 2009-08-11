@@ -17,9 +17,40 @@ static char storage_url[MAX_URL_SIZE];
 static char saved_username[MAX_HEADER_SIZE];
 static char saved_password[MAX_HEADER_SIZE];
 static char storage_token[MAX_HEADER_SIZE];
+static int snet_rewrite;
 static FILE *devnull = NULL;
 static pthread_mutex_t pool_mut;
 static pthread_mutexattr_t pool_matter;
+
+#ifdef HAVE_LIBMAGIC
+#include <magic.h>
+magic_t magic_cookie;
+const char *file_content_type(FILE *fp)
+{
+  const char *type = NULL;
+  char buf[1024];
+  int length = fread(buf, 1, sizeof(buf), fp);
+  rewind(fp);
+  type = magic_buffer(magic_cookie, buf, length);
+  if (type)
+    return type;
+  return "application/octet-stream";
+}
+#else
+const char *file_content_type(FILE *fp)
+{
+  return "application/octet-stream";
+}
+#endif
+
+void rewrite_url_snet(char *url)
+{
+  char protocol[MAX_URL_SIZE];
+  char rest[MAX_URL_SIZE];
+  sscanf(url, "%[a-z]://%s", protocol, rest);
+  if (strncasecmp(rest, "snet-", 5))
+    sprintf(url, "%s://snet-%s", protocol, rest);
+}
 
 typedef struct dispatcher
 {
@@ -75,10 +106,14 @@ static size_t header_dispatch(void *ptr, size_t size, size_t nmemb, void *stream
   header[size * nmemb] = '\0';
   if (sscanf(header, "%[^:]: %[^\r\n]", head, value) == 2)
   {
-    if (!strcasecmp(head, "x-auth-token"))
+    if (!strncasecmp(head, "x-auth-token", sizeof(head)))
       strncpy(storage_token, value, sizeof(storage_token));
-    if (!strcasecmp(head, "x-storage-url"))
+    if (!strncasecmp(head, "x-storage-url", sizeof(head)))
+    {
       strncpy(storage_url, value, sizeof(storage_url));
+      if (snet_rewrite)
+        rewrite_url_snet(storage_url);
+    }
   }
   return size * nmemb;
 }
@@ -135,10 +170,13 @@ static int send_request(char *method, curl_slist *headers, dispatcher *callback,
   }
   else if (!strcasecmp(method, "PUT") && callback && callback->read_fp)
   {
+    char content_type_header[MAX_HEADER_SIZE];
     curl_easy_setopt(curl, CURLOPT_UPLOAD, 1);
     curl_easy_setopt(curl, CURLOPT_INFILESIZE, callback->content_length);
     curl_easy_setopt(curl, CURLOPT_READDATA, callback->read_fp);
-    headers = curl_slist_append(headers, "Content-Type: application/octet-stream");
+    snprintf(content_type_header, sizeof(content_type_header),
+        "Content-Type: %s", file_content_type(callback->read_fp));
+    headers = curl_slist_append(headers, content_type_header);
   }
   else if (!strcasecmp(method, "HEAD"))
   {
@@ -174,7 +212,7 @@ static int send_request(char *method, curl_slist *headers, dispatcher *callback,
   curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response);
   if (response == 401 &&
       storage_token[0] &&
-      cloudfs_connect(saved_username, saved_password, saved_authurl))
+      cloudfs_connect(saved_username, saved_password, saved_authurl, snet_rewrite))
   {
     if (callback)
       dispatch_clear(callback);
@@ -347,7 +385,7 @@ int create_directory(const char *path)
   return (response >= 200 && response < 300);
 }
 
-int cloudfs_connect(char *username, char *password, char *authurl)
+int cloudfs_connect(char *username, char *password, char *authurl, int use_snet)
 {
   static int initialized = 0;
   struct curl_slist *headers = NULL;
@@ -365,7 +403,14 @@ int cloudfs_connect(char *username, char *password, char *authurl)
     strncpy(saved_authurl, authurl, sizeof(saved_password));
     devnull = fopen("/dev/null", "r");
     initialized = 1;
+    #ifdef HAVE_LIBMAGIC
+    magic_cookie = magic_open(MAGIC_MIME_TYPE);
+    magic_load(magic_cookie, NULL) ||
+        magic_load(magic_cookie, "/usr/share/misc/magic") ||
+        magic_load(magic_cookie, "/usr/share/file/magic");
+    #endif
   }
+  snet_rewrite = use_snet;
   snprintf(x_user, sizeof(x_user), "X-Auth-User: %s", username);
   headers = curl_slist_append(headers, x_user);
   snprintf(x_pass, sizeof(x_pass), "X-Auth-Key: %s", password);

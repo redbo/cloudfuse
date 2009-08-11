@@ -379,7 +379,8 @@ char *get_home_dir()
 
 int main(int argc, char **argv)
 {
-  char username[1024] = "", api_key[1024] = "", settings_filename[1024] = "";
+  char username[1024] = "", api_key[1024] = "",
+       settings_filename[1024] = "", use_snet[1024] = "";
   FILE *settings;
 
   char *home = get_home_dir();
@@ -394,6 +395,7 @@ int main(int argc, char **argv)
       sscanf(line, " api_key = %[^\r\n ]", api_key);
       sscanf(line, " cache_timeout = %d", &cache_timeout);
       sscanf(line, " authurl = %[^\r\n ]", authurl);
+      sscanf(line, " use_snet = %[^\r\n ]", use_snet);
     }
     fclose(settings);
   }
@@ -405,10 +407,12 @@ int main(int argc, char **argv)
     fprintf(stderr, "  api_key=[Mosso api key]\n\n");
     fprintf(stderr, "These entries are optional:\n\n");
     fprintf(stderr, "  cache_timeout=[seconds for directory caching]\n");
+    fprintf(stderr, "  use_snet=[True to connect to snet]\n");
     fprintf(stderr, "  authurl=[used for testing]\n");
     return 1;
   }
-  if (!cloudfs_connect(username, api_key, authurl))
+  if (!cloudfs_connect(username, api_key, authurl,
+        !strncasecmp(use_snet, "true", sizeof(use_snet))))
   {
     fprintf(stderr, "Unable to authenticate.\n");
     return 1;
