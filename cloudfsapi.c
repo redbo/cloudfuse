@@ -403,7 +403,7 @@ int cloudfs_connect(char *username, char *password, char *authurl, int use_snet)
     strncpy(saved_authurl, authurl, sizeof(saved_authurl));
     devnull = fopen("/dev/null", "r");
     #ifdef HAVE_LIBMAGIC
-    magic_cookie = magic_open(MAGIC_MIME_TYPE);
+    magic_cookie = magic_open(MAGIC_MIME);
     magic_load(magic_cookie, NULL) ||
         magic_load(magic_cookie, "/usr/share/misc/magic") ||
         magic_load(magic_cookie, "/usr/share/file/magic");
