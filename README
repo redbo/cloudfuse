@@ -1,16 +1,18 @@
-Cloudfuse is a FUSE application which provides access to Mosso's Cloud Files.
+Cloudfuse is a FUSE application which provides access to Rackspace's Cloud Files.
 
 Cloud Files is a remote storage system which is similar in principle to
-Amazon's S3.  It provides a simple RESTful interface to storing and retrieving
+Amazon S3.  It provides a simple RESTful interface to storing and retrieving
 objects.
 
-    http://www.mosso.com/cloudfiles.jsp
+    http://www.rackspacecloud.com/cloud_hosting_products/files
 
 BUILDING:
 
     You'll need libcurl, fuse, and libxml2 (and possibly their dev packages)
     installed to build it.  If libmagic is available at compile time, it will
-    be used to automatically determine content-types.
+    be used as a fallback when the content-type can't be guessed based on file
+    extension.
+
     Cloudfuse is built and installed like any other autoconf configured code.
     Normally,
         ./configure
@@ -28,6 +30,7 @@ USE:
     The following settings are optional:
         use_snet=[True to use snet for connections]
         cache_timeout=[seconds for directory caching, default 600]
+        mimetypes=[mime.types file, defaults to /etc/mime.types]
         authurl=[authentication url, used mostly for testing]
 
     To run it, the syntax should be as simple as:
@@ -42,6 +45,9 @@ USE:
 
 BUGS/SHORTCOMINGS:
 
+    * Doesn't implement rename().  There's no good way to do this with the
+      Cloud Files API.  Unfortunately, this makes cloudfuse considerably less
+      useful in Finder, as it expects to be able to rename a lot.
     * When reading and writing files, it buffers them in a local temp file.
     * It keeps an in-memory cache of the directory structure, so it may not be
       usable for large file systems.  Also, files added by other applications
@@ -52,11 +58,6 @@ BUGS/SHORTCOMINGS:
       "application/directory".
     * Cloud Files limits container and object listings to 10,000 items.
       cloudfuse won't list more than this number of directories/files.
-    * Doesn't implement rename().  There's currently no good way to do this
-      on the backend.  Unfortunately, this makes cloudfuse considerably less
-      useful in Finder, as it expects to be able to rename a lot.
-    * If libmagic is not available or it can't determine the mimetype of a
-      file, "application/octet-stream" is used.
 
 Thanks, and I hope you find it useful.
 

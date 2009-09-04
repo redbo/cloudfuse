@@ -13,7 +13,6 @@
 #include "config.h"
 
 int cache_timeout = 600;
-char authurl[MAX_URL_SIZE] = "https://api.mosso.com/auth";
 
 typedef struct dir_cache
 {
@@ -369,18 +368,21 @@ static int cfs_chmod(const char *path, mode_t mode)
 char *get_home_dir()
 {
   char *home;
+  if ((home = getenv("HOME")) && !access(home, R_OK))
+    return home;
   struct passwd *pwd = getpwuid(geteuid());
   if ((home = pwd->pw_dir) && !access(home, R_OK))
-    return home;
-  if ((home = getenv("HOME")) && !access(home, R_OK))
     return home;
   return "~";
 }
 
 int main(int argc, char **argv)
 {
-  char username[1024] = "", api_key[1024] = "",
-       settings_filename[1024] = "", use_snet[1024] = "";
+  char line[1024];
+  char username[sizeof(line)] = "", api_key[sizeof(line)] = "",
+       settings_filename[sizeof(line)] = "", use_snet[sizeof(line)] = "",
+       mimetypes[sizeof(line)] = "/etc/mime.types",
+       authurl[MAX_URL_SIZE] = "https://api.mosso.com/auth";
   FILE *settings;
 
   char *home = get_home_dir();
@@ -388,7 +390,6 @@ int main(int argc, char **argv)
            home,  home[strlen(home)] == '/' ? "" : "/");
   if ((settings = fopen(settings_filename, "r")))
   {
-    char line[1024];
     while (fgets(line, sizeof(line), settings))
     {
       sscanf(line, " username = %[^\r\n ]", username);
@@ -396,6 +397,7 @@ int main(int argc, char **argv)
       sscanf(line, " cache_timeout = %d", &cache_timeout);
       sscanf(line, " authurl = %[^\r\n ]", authurl);
       sscanf(line, " use_snet = %[^\r\n ]", use_snet);
+      sscanf(line, " mimetypes = %[^\r\n ]", mimetypes);
     }
     fclose(settings);
   }
@@ -408,9 +410,11 @@ int main(int argc, char **argv)
     fprintf(stderr, "These entries are optional:\n\n");
     fprintf(stderr, "  cache_timeout=[seconds for directory caching]\n");
     fprintf(stderr, "  use_snet=[True to connect to snet]\n");
+    fprintf(stderr, "  mimetypes=[defaults to /etc/mime.types]\n");
     fprintf(stderr, "  authurl=[used for testing]\n");
     return 1;
   }
+  load_mimetypes(mimetypes);
   if (!cloudfs_connect(username, api_key, authurl,
         !strncasecmp(use_snet, "true", sizeof(use_snet))))
   {

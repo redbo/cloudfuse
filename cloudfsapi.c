@@ -12,36 +12,83 @@
 #include "cloudfsapi.h"
 #include "config.h"
 
-static char saved_authurl[MAX_URL_SIZE];
-static char storage_url[MAX_URL_SIZE];
-static char saved_username[MAX_HEADER_SIZE];
-static char saved_password[MAX_HEADER_SIZE];
-static char storage_token[MAX_HEADER_SIZE];
-static int snet_rewrite;
-static FILE *devnull = NULL;
-static pthread_mutex_t pool_mut;
-static pthread_mutexattr_t pool_matter;
-
 #ifdef HAVE_LIBMAGIC
 #include <magic.h>
 static magic_t magic_cookie;
-const char *file_content_type(FILE *fp)
-{
-  const char *type = NULL;
-  char buf[1024];
-  int length = fread(buf, 1, sizeof(buf), fp);
-  rewind(fp);
-  type = magic_buffer(magic_cookie, buf, length);
-  if (type)
-    return type;
-  return "application/octet-stream";
-}
-#else
-const char *file_content_type(FILE *fp)
-{
-  return "application/octet-stream";
-}
 #endif
+
+struct {
+  char username[MAX_HEADER_SIZE];
+  char password[MAX_HEADER_SIZE];
+  char authurl[MAX_URL_SIZE];
+  int use_snet;
+} reconnect_args;
+static char storage_url[MAX_URL_SIZE];
+static char storage_token[MAX_HEADER_SIZE];
+static FILE *devnull = NULL;
+static pthread_mutex_t pool_mut;
+static pthread_mutexattr_t pool_matter;
+typedef const char *extension[2];
+static extension *extensions = NULL;
+static int ext_size = 0;
+static int ext_count = 0;
+
+static void add_mime_type(char *ext, char *type)
+{
+  if ((ext_count + 1) > ext_size)
+    extensions = realloc(extensions, (ext_size += 100) * sizeof(extension));
+  extensions[ext_count][0] = strdup(ext);
+  extensions[ext_count++][1] = strdup(type);
+}
+
+void load_mimetypes(const char *filename)
+{
+  int i, count;
+  FILE *fp;
+  char line[1024], type[sizeof(line)], ext[7][sizeof(line)], *comment;
+  char *common_types[][2] = {
+    {"gif", "image/gif"}, {"png", "image/png"}, {"jpeg", "image/jpeg"},
+    {"jpg", "image/jpeg"}, {"css", "text/css"}, {"xml", "text/xml"},
+    {"html", "text/html"}, {"htm", "text/html"}, {"txt", "text/plain"},
+    {"bmp", "image/x-ms-bmp"}, {"mpeg", "video/mpeg"}, {"mpg", "video/mpeg"},
+    {"mov", "video/quicktime"}, {"mp3", "audio/mpeg"}, {"wav", "audio/x-wav"},
+    {"doc", "application/msword"}, {"ppt", "application/vnd.ms-powerpoint"},
+    {"zip", "application/zip"}, {"js", "application/x-javascript"},
+    {"pdf", "application/pdf"}, {"xhtml", "application/xhtml+xml"}, {NULL}
+  };
+  for (i = 0; common_types[i][0]; i++)
+    add_mime_type(common_types[i][0], common_types[i][1]);
+  if (!(fp = fopen(filename, "r")))
+    return;
+  while (fgets(line, sizeof(line), fp))
+  {
+    if ((comment = strstr(line, "#")))
+      *comment = '\0';
+    count = sscanf(line, " %s %s %s %s %s %s %s %s ", type, ext[0], ext[1],
+            ext[2], ext[3], ext[4], ext[5], ext[6]);
+    for (i = 0; i < count - 1; i++)
+      add_mime_type(ext[i], type);
+  }
+  fclose(fp);
+}
+
+static const char *file_content_type(FILE *fp, const char *path)
+{
+  int i;
+  const char *ext;
+  if ((ext = rindex(path, '.')) && *(++ext))
+    for (i = 0; i < ext_count; i++)
+      if (!strcasecmp(extensions[i][0], ext))
+        return extensions[i][1];
+#ifdef HAVE_LIBMAGIC
+  char buf[1024];
+  i = fread(buf, 1, sizeof(buf), fp);
+  rewind(fp);
+  if ((ext = magic_buffer(magic_cookie, buf, i)))
+    return ext;
+#endif
+  return "application/octet-stream";
+}
 
 void rewrite_url_snet(char *url)
 {
@@ -109,11 +156,7 @@ static size_t header_dispatch(void *ptr, size_t size, size_t nmemb, void *stream
     if (!strncasecmp(head, "x-auth-token", sizeof(head)))
       strncpy(storage_token, value, sizeof(storage_token));
     if (!strncasecmp(head, "x-storage-url", sizeof(head)))
-    {
       strncpy(storage_url, value, sizeof(storage_url));
-      if (snet_rewrite)
-        rewrite_url_snet(storage_url);
-    }
   }
   return size * nmemb;
 }
@@ -175,7 +218,7 @@ static int send_request(char *method, curl_slist *headers, dispatcher *callback,
     curl_easy_setopt(curl, CURLOPT_INFILESIZE, callback->content_length);
     curl_easy_setopt(curl, CURLOPT_READDATA, callback->read_fp);
     snprintf(content_type_header, sizeof(content_type_header),
-        "Content-Type: %s", file_content_type(callback->read_fp));
+        "Content-Type: %s", file_content_type(callback->read_fp, path));
     headers = curl_slist_append(headers, content_type_header);
   }
   else if (!strcasecmp(method, "HEAD"))
@@ -210,9 +253,9 @@ static int send_request(char *method, curl_slist *headers, dispatcher *callback,
   curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0);
   curl_easy_perform(curl);
   curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response);
-  if (response == 401 &&
-      storage_token[0] &&
-      cloudfs_connect(saved_username, saved_password, saved_authurl, snet_rewrite))
+  if (response == 401 && storage_token[0] &&
+      cloudfs_connect(reconnect_args.username, reconnect_args.password,
+                      reconnect_args.authurl, reconnect_args.use_snet))
   {
     if (callback)
       dispatch_clear(callback);
@@ -398,9 +441,10 @@ int cloudfs_connect(char *username, char *password, char *authurl, int use_snet)
     curl_global_init(CURL_GLOBAL_ALL);
     pthread_mutexattr_init(&pool_matter);
     pthread_mutex_init(&pool_mut, &pool_matter);
-    strncpy(saved_username, username, sizeof(saved_username));
-    strncpy(saved_password, password, sizeof(saved_password));
-    strncpy(saved_authurl, authurl, sizeof(saved_authurl));
+    strncpy(reconnect_args.username, username, sizeof(reconnect_args.username));
+    strncpy(reconnect_args.password, password, sizeof(reconnect_args.password));
+    strncpy(reconnect_args.authurl, authurl, sizeof(reconnect_args.authurl));
+    reconnect_args.use_snet = use_snet;
     devnull = fopen("/dev/null", "r");
     #ifdef HAVE_LIBMAGIC
     magic_cookie = magic_open(MAGIC_MIME);
@@ -410,7 +454,6 @@ int cloudfs_connect(char *username, char *password, char *authurl, int use_snet)
     #endif
     initialized = 1;
   }
-  snet_rewrite = use_snet;
   snprintf(x_user, sizeof(x_user), "X-Auth-User: %s", username);
   headers = curl_slist_append(headers, x_user);
   snprintf(x_pass, sizeof(x_pass), "X-Auth-Key: %s", password);
@@ -419,6 +462,8 @@ int cloudfs_connect(char *username, char *password, char *authurl, int use_snet)
   dispatcher *d = dispatch_init();
   response = send_request("GET", headers, d, authurl);
   dispatch_free(d);
+  if (use_snet && storage_url[0])
+    rewrite_url_snet(storage_url);
   return (response >= 200 && response < 300 && storage_token[0] && storage_url[0]);
 }
 
