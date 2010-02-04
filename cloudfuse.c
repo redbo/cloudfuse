@@ -382,7 +382,7 @@ int main(int argc, char **argv)
   char username[sizeof(line)] = "", api_key[sizeof(line)] = "",
        settings_filename[sizeof(line)] = "", use_snet[sizeof(line)] = "",
        mimetypes[sizeof(line)] = "/etc/mime.types",
-       authurl[MAX_URL_SIZE] = "https://api.mosso.com/auth";
+       authurl[MAX_URL_SIZE] = "https://auth.api.rackspacecloud.com/v1.0";
   FILE *settings;
 
   char *home = get_home_dir();
