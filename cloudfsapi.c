@@ -32,6 +32,7 @@ typedef const char *extension[2];
 static extension *extensions = NULL;
 static int ext_size = 0;
 static int ext_count = 0;
+static int debug = 0;
 
 static void add_mime_type(char *ext, char *type)
 {
@@ -153,9 +154,9 @@ static size_t header_dispatch(void *ptr, size_t size, size_t nmemb, void *stream
   header[size * nmemb] = '\0';
   if (sscanf(header, "%[^:]: %[^\r\n]", head, value) == 2)
   {
-    if (!strncasecmp(head, "x-auth-token", sizeof(head)))
+    if (!strncasecmp(head, "x-auth-token", size * nmemb))
       strncpy(storage_token, value, sizeof(storage_token));
-    if (!strncasecmp(head, "x-storage-url", sizeof(head)))
+    if (!strncasecmp(head, "x-storage-url", size * nmemb))
       strncpy(storage_url, value, sizeof(storage_url));
   }
   return size * nmemb;
@@ -231,7 +232,7 @@ static int send_request(char *method, curl_slist *headers, dispatcher *callback,
     curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, method);
   }
   headers = curl_slist_append(headers, "Expect:");
-  curl_easy_setopt(curl, CURLOPT_VERBOSE, DEBUG);
+  curl_easy_setopt(curl, CURLOPT_VERBOSE, debug);
   curl_easy_setopt(curl, CURLOPT_WRITEHEADER, callback);
   curl_easy_setopt(curl, CURLOPT_HEADER, 0);
   curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1);
@@ -426,6 +427,11 @@ int create_directory(const char *path)
   int response = send_request("MKDIR", NULL, NULL, encoded);
   curl_free(encoded);
   return (response >= 200 && response < 300);
+}
+
+void cloudfs_debug(int dbg)
+{
+  debug = dbg;
 }
 
 int cloudfs_connect(char *username, char *password, char *authurl, int use_snet)

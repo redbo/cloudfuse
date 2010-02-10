@@ -384,6 +384,8 @@ int main(int argc, char **argv)
        mimetypes[sizeof(line)] = "/etc/mime.types",
        authurl[MAX_URL_SIZE] = "https://auth.api.rackspacecloud.com/v1.0";
   FILE *settings;
+  int foreground = 0;
+  struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
 
   char *home = get_home_dir();
   snprintf(settings_filename, sizeof(settings_filename), "%s%s.cloudfuse",
@@ -415,6 +417,10 @@ int main(int argc, char **argv)
     return 1;
   }
   load_mimetypes(mimetypes);
+
+  fuse_parse_cmdline(&args, NULL, NULL, &foreground);
+  cloudfs_debug(foreground);
+
   if (!cloudfs_connect(username, api_key, authurl,
         !strncasecmp(use_snet, "true", sizeof(use_snet))))
   {

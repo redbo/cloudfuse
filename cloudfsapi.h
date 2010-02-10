@@ -5,9 +5,6 @@
 #include <curl/types.h>
 #include <curl/easy.h>
 
-#if !defined(DEBUG)
-#define DEBUG 0
-#endif
 #define BUFFER_INITIAL_SIZE 4096
 #define MAX_HEADER_SIZE 4096
 #define MAX_PATH_SIZE (1024 + 256 + 3)
