@@ -108,6 +108,7 @@ static void update_dir_cache(const char *path, int size, int isdir)
       de->name = strdup(&path[strlen(cw->path)+1]);
       de->full_name = strdup(path);
       de->content_type = strdup(isdir ? "application/directory" : "application/octet-stream");
+      de->last_modified = time(NULL);
       de->next = cw->entries;
       cw->entries = de;
       if (isdir)
@@ -192,7 +193,7 @@ static int cfs_getattr(const char *path, struct stat *stbuf)
   dir_entry *de = path_info(path);
   if (!de)
     return -ENOENT;
-  stbuf->st_mtime = de->last_modified;
+  stbuf->st_ctime = stbuf->st_mtime = de->last_modified;
   if (de->isdir)
   {
     stbuf->st_size = 0;
