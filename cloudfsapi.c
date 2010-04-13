@@ -1,3 +1,4 @@
+#define _GNU_SOURCE
 #include <stdio.h>
 #include <string.h>
 #include <stdarg.h>
@@ -454,9 +455,9 @@ int cloudfs_connect(char *username, char *password, char *authurl, int use_snet)
     devnull = fopen("/dev/null", "r");
     #ifdef HAVE_LIBMAGIC
     magic_cookie = magic_open(MAGIC_MIME);
-    magic_load(magic_cookie, NULL) ||
-        magic_load(magic_cookie, "/usr/share/misc/magic") ||
-        magic_load(magic_cookie, "/usr/share/file/magic");
+    if (magic_load(magic_cookie, NULL))
+      if (magic_load(magic_cookie, "/usr/share/misc/magic"))
+         magic_load(magic_cookie, "/usr/share/file/magic");
     #endif
     initialized = 1;
   }
