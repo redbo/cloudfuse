@@ -9,6 +9,7 @@
 #include <sys/types.h>
 #include <pthread.h>
 #include <pwd.h>
+#include <fcntl.h>
 #include "cloudfsapi.h"
 #include "config.h"
 

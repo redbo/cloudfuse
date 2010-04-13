@@ -3,6 +3,7 @@
 
 AC_PREREQ(2.61)
 AC_INIT(FULL-PACKAGE-NAME, VERSION, BUG-REPORT-ADDRESS)
+AC_LANG([C])
 AC_CONFIG_SRCDIR([cloudfuse.c])
 AC_CONFIG_HEADER([config.h])
 
@@ -11,19 +12,24 @@ AC_PROG_CC
 AC_PROG_INSTALL
 
 # Checks for libraries.
-# FIXME: Replace `main' with a function in `-lcurl':
-AC_CHECK_LIB([curl], [main])
-# FIXME: Replace `main' with a function in `-lfuse':
-AC_CHECK_LIB([fuse], [main])
-# FIXME: Replace `main' with a function in `-lmagic':
-AC_CHECK_LIB([magic], [main])
-# FIXME: Replace `main' with a function in `-lxml2':
-AC_CHECK_LIB([xml2], [main])
+AC_CHECK_LIB([curl], [curl_easy_init], , AC_MSG_ERROR([unable to link libcurl]))
+AC_CHECK_LIB([fuse], [fuse_main], , AC_MSG_ERROR([unable to link libfuse]))
+AC_CHECK_LIB([xml2], [xmlCreatePushParserCtxt], , AC_MSG_ERROR([unable to link libxml2]))
+AC_CHECK_LIB([magic], [magic_buffer])
 
 # Checks for header files.
 AC_FUNC_ALLOCA
 AC_HEADER_STDC
-AC_CHECK_HEADERS([stdlib.h string.h unistd.h])
+AC_CHECK_HEADER([curl/curl.h], , AC_MSG_ERROR([unable to find libcurl headers]))
+AC_CHECK_HEADER([fuse.h], , AC_MSG_ERROR([unable to find libfuse headers]),
+[
+#ifndef _FILE_OFFSET_BITS
+#define _FILE_OFFSET_BITS 64
+#endif
+])
+AC_CHECK_HEADERS([fcntl.h stdlib.h string.h unistd.h])
+
+PKG_CHECK_MODULES([XML], libxml-2.0 >= 2.0, , AC_MSG_ERROR([unable to get libxml2 information]))
 
 # Checks for typedefs, structures, and compiler characteristics.
 AC_C_CONST
