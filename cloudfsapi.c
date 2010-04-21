@@ -232,14 +232,12 @@ static int send_request(char *method, curl_slist *headers, dispatcher *callback,
   {
     curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, method);
   }
-  headers = curl_slist_append(headers, "Expect:");
   curl_easy_setopt(curl, CURLOPT_VERBOSE, debug);
   curl_easy_setopt(curl, CURLOPT_WRITEHEADER, callback);
   curl_easy_setopt(curl, CURLOPT_HEADER, 0);
   curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1);
   curl_easy_setopt(curl, CURLOPT_MAXREDIRS, 4);
   curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1);
-  curl_easy_setopt(curl, CURLOPT_TIMEOUT, 10);
   curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 5);
   curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
   curl_easy_setopt(curl, CURLOPT_USERAGENT, USER_AGENT);

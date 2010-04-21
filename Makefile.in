@@ -24,7 +24,7 @@ uninstall:
 	/bin/rm -f $(bindir)/cloudfuse
 
 cloudfuse: $(SOURCES) $(HEADERS)
-	$(CC) -D_FILE_OFFSET_BITS=64 $(CFLAGS) -o cloudfuse $(SOURCES) $(LIBS)
+	$(CC) $(CFLAGS) -o cloudfuse $(SOURCES) $(LIBS)
 
 clean:
 	/bin/rm -f cloudfuse
