@@ -4411,7 +4411,11 @@ fi
 
 
 
-for ac_header in fcntl.h stdlib.h string.h unistd.h
+
+
+
+
+for ac_header in fcntl.h stdlib.h string.h unistd.h strings.h pwd.h alloca.h pthread.h
 do
 as_ac_Header=`echo "ac_cv_header_$ac_header" | $as_tr_sh`
 if { as_var=$as_ac_Header; eval "test \"\${$as_var+set}\" = set"; }; then

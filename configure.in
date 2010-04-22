@@ -27,7 +27,7 @@ AC_CHECK_HEADER([fuse.h], , AC_MSG_ERROR([unable to find libfuse headers]),
 #define _FILE_OFFSET_BITS 64
 #endif
 ])
-AC_CHECK_HEADERS([fcntl.h stdlib.h string.h unistd.h])
+AC_CHECK_HEADERS([fcntl.h stdlib.h string.h unistd.h strings.h pwd.h alloca.h pthread.h])
 
 PKG_CHECK_MODULES([XML], libxml-2.0 >= 2.0, , AC_MSG_ERROR([unable to get libxml2 information]))
 

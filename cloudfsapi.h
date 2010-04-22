@@ -24,8 +24,8 @@ typedef struct dir_entry
   struct dir_entry *next;
 } dir_entry;
 
-int object_read_from(const char *path, FILE *fp);
-int object_write_to(const char *path, FILE *fp);
+int object_read_fp(const char *path, FILE *fp);
+int object_write_fp(const char *path, FILE *fp);
 int list_directory(const char *path, dir_entry **);
 int delete_object(const char *path);
 int create_directory(const char *label);
@@ -35,5 +35,6 @@ void free_dir_list(dir_entry *dir_list);
 int object_truncate(const char *path);
 
 void load_mimetypes(const char *filename);
+size_t file_size(int fd);
 #endif
 

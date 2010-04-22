@@ -1,9 +1,11 @@
 #define FUSE_USE_VERSION 26
 #define _FILE_OFFSET_BITS 64
+#define _XOPEN_SOURCE 500
 #include <fuse.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <errno.h>
 #include <unistd.h>
 #include <sys/stat.h>
@@ -25,14 +27,12 @@ typedef struct dir_cache
 } dir_cache;
 static dir_cache *dcache;
 static pthread_mutex_t dmut;
-static pthread_mutexattr_t dmattr;
 
-static int file_size(int fd)
+typedef struct openfile
 {
-  struct stat buf;
-  fstat(fd, &buf);
-  return buf.st_size;
-}
+  int fd;
+  int flags;
+} openfile;
 
 static void dir_for(const char *path, char *dir)
 {
@@ -215,7 +215,7 @@ static int cfs_fgetattr(const char *path, struct stat *stbuf, struct fuse_file_i
 {
   if (info->fh)
   {
-    stbuf->st_size = file_size(info->fh);
+    stbuf->st_size = file_size(((openfile *)info->fh)->fd);
     stbuf->st_mode = S_IFREG | 0666;
     stbuf->st_nlink = 1;
     return 0;
@@ -248,9 +248,12 @@ static int cfs_mkdir(const char *path, mode_t mode)
 static int cfs_create(const char *path, mode_t mode, struct fuse_file_info *info)
 {
   FILE *temp_file = tmpfile();
-  info->fh = dup(fileno(temp_file));
-  update_dir_cache(path, 0, 0);
+  openfile *of = (openfile *)malloc(sizeof(openfile));
+  of->fd = dup(fileno(temp_file));
   fclose(temp_file);
+  of->flags = info->flags;
+  info->fh = (long)of;
+  update_dir_cache(path, 0, 0);
   info->direct_io = 1;
   return 0;
 }
@@ -260,41 +263,51 @@ static int cfs_open(const char *path, struct fuse_file_info *info)
   FILE *temp_file = tmpfile();
   if (!(info->flags & O_WRONLY))
   {
-    if (!object_write_to(path, temp_file))
+    if (!object_write_fp(path, temp_file))
     {
       fclose(temp_file);
       return -ENOENT;
     }
     update_dir_cache(path, 0, 0);
   }
-  info->fh = dup(fileno(temp_file));
-  info->direct_io = 1;
+  openfile *of = (openfile *)malloc(sizeof(openfile));
+  of->fd = dup(fileno(temp_file));
   fclose(temp_file);
+  of->flags = info->flags;
+  info->fh = (long)of;
+  info->direct_io = 1;
   return 0;
 }
 
 static int cfs_read(const char *path, char *buf, size_t size, off_t offset, struct fuse_file_info *info)
 {
-  lseek(info->fh, offset, SEEK_SET);
-  return read(info->fh, buf, size);
+  return pread(((openfile *)info->fh)->fd, buf, size, offset);
+}
+
+static int cfs_flush(const char *path, struct fuse_file_info *info)
+{
+  openfile *of = (openfile *)info->fh;
+  if (of)
+  {
+    update_dir_cache(path, file_size(of->fd), 0);
+    if (of->flags & O_RDWR || of->flags & O_WRONLY)
+    {
+      FILE *fp = fdopen(dup(of->fd), "r");
+      rewind(fp);
+      if (!object_read_fp(path, fp))
+      {
+        fclose(fp);
+        return -ENOENT;
+      }
+      fclose(fp);
+    }
+  }
+  return 0;
 }
 
 static int cfs_release(const char *path, struct fuse_file_info *info)
 {
-  update_dir_cache(path, file_size(info->fh), 0);
-  if (info->flags & O_RDWR || info->flags & O_WRONLY)
-  {
-    FILE *fp = fdopen(info->fh, "r");
-    fseek(fp, 0, SEEK_SET);
-    if (!object_read_from(path, fp))
-    {
-      fclose(fp);
-      return -ENOENT;
-    }
-    fclose(fp);
-  }
-  else
-    close(info->fh);
+  close(((openfile *)info->fh)->fd);
   return 0;
 }
 
@@ -310,7 +323,7 @@ static int cfs_rmdir(const char *path)
 
 static int cfs_ftruncate(const char *path, off_t size, struct fuse_file_info *info)
 {
-  ftruncate(info->fh, size);
+  ftruncate(((openfile *)info->fh)->fd, size);
   lseek(info->fh, 0, SEEK_SET);
   update_dir_cache(path, size, 0);
   return 0;
@@ -318,9 +331,8 @@ static int cfs_ftruncate(const char *path, off_t size, struct fuse_file_info *in
 
 static int cfs_write(const char *path, const char *buf, size_t length, off_t offset, struct fuse_file_info *info)
 {
-  lseek(info->fh, offset, SEEK_SET);
   update_dir_cache(path, offset + length, 0);
-  return write(info->fh, buf, length);
+  return pwrite(((openfile *)info->fh)->fd, buf, length, offset);
 }
 
 static int cfs_unlink(const char *path)
@@ -439,6 +451,7 @@ int main(int argc, char **argv)
     .open = cfs_open,
     .fgetattr = cfs_fgetattr,
     .getattr = cfs_getattr,
+    .flush = cfs_flush,
     .release = cfs_release,
     .rmdir = cfs_rmdir,
     .ftruncate = cfs_ftruncate,
@@ -451,9 +464,7 @@ int main(int argc, char **argv)
     .chown = cfs_chown,
   };
 
-  pthread_mutexattr_init(&dmattr);
-  pthread_mutex_init(&dmut, &dmattr);
-
+  pthread_mutex_init(&dmut, NULL);
   return fuse_main(argc, argv, &cfs_oper, NULL);
 }
 
