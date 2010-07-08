@@ -352,7 +352,7 @@ static int cfs_fsync(const char *path, int idunno, struct fuse_file_info *info)
 
 static int cfs_truncate(const char *path, off_t size)
 {
-  object_truncate(path);
+  object_truncate(path, size);
   return 0;
 }
 

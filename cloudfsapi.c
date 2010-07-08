@@ -233,14 +233,22 @@ int object_write_fp(const char *path, FILE *fp)
   return 0;
 }
 
-int object_truncate(const char *path)
-{//TODO: does this do anything?
+int object_truncate(const char *path, off_t size)
+{
   char *encoded = curl_escape(path, 0);
-  int response = send_request("GET", encoded, NULL, NULL);
+  int response;
+  if (size == 0)
+  {
+    FILE *fp = fopen("/dev/null", "r");
+    response = send_request("PUT", encoded, fp, NULL);
+    fclose(fp);
+  }
+  else
+  {//TODO: this is busted
+    response = send_request("GET", encoded, NULL, NULL);
+  }
   curl_free(encoded);
-  if (response >= 200 && response < 300)
-    return 1;
-  return 0;
+  return (response >= 200 && response < 300);
 }
 
 int list_directory(const char *path, dir_entry **dir_list)

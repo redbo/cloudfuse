@@ -32,7 +32,7 @@ int create_directory(const char *label);
 int cloudfs_connect(char *username, char *password, char *authurl, int snet_rewrite);
 void cloudfs_debug(int dbg);
 void free_dir_list(dir_entry *dir_list);
-int object_truncate(const char *path);
+int object_truncate(const char *path, off_t size);
 
 void load_mimetypes(const char *filename);
 size_t file_size(int fd);
