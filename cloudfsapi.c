@@ -1,6 +1,7 @@
 #define _GNU_SOURCE
 #include <stdio.h>
 #include <string.h>
+#include <stdarg.h>
 #include <stdlib.h>
 #include <sys/stat.h>
 #include <alloca.h>
@@ -73,9 +74,17 @@ static CURL *get_connection(const char *path)
 {
   char url[MAX_URL_SIZE];
   if (!storage_url[0])
-    return NULL;
+  {
+    debugf("get_connection with no storage_url?");
+    abort();
+  }
   pthread_mutex_lock(&pool_mut);
   CURL *curl = curl_pool_count ? curl_pool[--curl_pool_count] : curl_easy_init();
+  if (!curl)
+  {
+    debugf("curl alloc failed");
+    abort();
+  }
   pthread_mutex_unlock(&pool_mut);
   char *slash;
   while ((slash = strstr(path, "%2F")) || (slash = strstr(path, "%2f")))
@@ -375,7 +384,7 @@ size_t file_size(int fd)
 
 int cloudfs_connect(char *username, char *password, char *authurl, int use_snet)
 {
-  struct {
+  static struct {
     char username[MAX_HEADER_SIZE], password[MAX_HEADER_SIZE],
          authurl[MAX_URL_SIZE], use_snet;
   } reconnect_args;
@@ -446,5 +455,18 @@ int cloudfs_connect(char *username, char *password, char *authurl, int use_snet)
   if (use_snet && storage_url[0])
     rewrite_url_snet(storage_url);
   return (response >= 200 && response < 300 && storage_token[0] && storage_url[0]);
+}
+
+void debugf(char *fmt, ...)
+{
+  if (debug)
+  {
+    va_list args;
+    va_start(args, fmt);
+    fputs("!!! ", stderr);
+    vfprintf(stderr, fmt, args);
+    va_end(args);
+    putc('\n', stderr);
+  }
 }
 

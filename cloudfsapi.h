@@ -36,5 +36,7 @@ int object_truncate(const char *path, off_t size);
 
 void load_mimetypes(const char *filename);
 size_t file_size(int fd);
+
+void debugf(char *fmt, ...);
 #endif
 
