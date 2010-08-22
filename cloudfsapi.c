@@ -9,6 +9,7 @@
 #include <time.h>
 #include <unistd.h>
 #include <sys/types.h>
+#include <sys/time.h>
 #include <libxml/tree.h>
 #include "cloudfsapi.h"
 #include "config.h"
@@ -114,24 +115,25 @@ static void return_connection(CURL *curl)
   pthread_mutex_unlock(&pool_mut);
 }
 
-static curl_slist *base_headers()
+void add_header(curl_slist **headers, const char *name, const char *value)
 {
   char x_header[MAX_HEADER_SIZE];
-  snprintf(x_header, sizeof(x_header), "X-Auth-Token: %s", storage_token);
-  return curl_slist_append(NULL, x_header);
+  snprintf(x_header, sizeof(x_header), "%s: %s", name, value);
+  *headers = curl_slist_append(*headers, x_header);
 }
 
 static int send_request(char *method, const char *path, FILE *fp, xmlParserCtxtPtr xmlctx)
 {
   long response = -1;
   CURL *curl = get_connection(path);
-  curl_slist *headers = base_headers();
+  curl_slist *headers = NULL;
+  add_header(&headers, "X-Auth-Token", storage_token);
 
   if (!strcasecmp(method, "MKDIR"))
   {
     curl_easy_setopt(curl, CURLOPT_UPLOAD, 1);
     curl_easy_setopt(curl, CURLOPT_INFILESIZE, 0);
-    headers = curl_slist_append(headers, "Content-Type: application/directory");
+    add_header(&headers, "Content-Type", "application/directory");
   }
   else if (!strcasecmp(method, "PUT") && fp)
   {
@@ -139,9 +141,7 @@ static int send_request(char *method, const char *path, FILE *fp, xmlParserCtxtP
     curl_easy_setopt(curl, CURLOPT_UPLOAD, 1);
     curl_easy_setopt(curl, CURLOPT_INFILESIZE, file_size(fileno(fp)));
     curl_easy_setopt(curl, CURLOPT_READDATA, fp);
-    snprintf(x_header, sizeof(x_header), "Content-Type: %s",
-             file_content_type(fp, path));
-    headers = curl_slist_append(headers, x_header);
+    add_header(&headers, "Content-Type", file_content_type(fp, path));
   }
   else if (!strcasecmp(method, "HEAD"))
   {
@@ -156,14 +156,26 @@ static int send_request(char *method, const char *path, FILE *fp, xmlParserCtxtP
       curl_easy_setopt(curl, CURLOPT_WRITEDATA, xmlctx);
       curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, &xml_dispatch);
     }
-    else
+    else if (fp)
       curl_easy_setopt(curl, CURLOPT_WRITEDATA, fp);
   }
   curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
   curl_easy_perform(curl);
   curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response);
-  if (response == 401 && cloudfs_connect(0, 0, 0, 0)) // re-authenticate on 401s
+  if (response >= 500 || response == 401) // retry on failures
   {
+    struct timeval wait = {5, 0}; // sleep 5 seconds
+    select(0, NULL, NULL, NULL, &wait);
+    if (response == 401) // re-authenticate on 401s
+    {
+      char x_header[MAX_HEADER_SIZE];
+      debugf("Re-authenticating");
+      if (!cloudfs_connect(0, 0, 0, 0))
+        return response;
+      add_header(&headers, "X-Auth-Token", "");
+      add_header(&headers, "X-Auth-Token", storage_token);
+      curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+    }
     if (xmlctx)
     {
       xmlFreeDoc(xmlctx->myDoc);
@@ -172,6 +184,7 @@ static int send_request(char *method, const char *path, FILE *fp, xmlParserCtxtP
     }
     if (fp)
       rewind(fp);
+    debugf("Attempting request again");
     curl_easy_perform(curl);
     curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response);
   }
@@ -436,10 +449,9 @@ int cloudfs_connect(char *username, char *password, char *authurl, int use_snet)
   }
 
   storage_token[0] = storage_url[0] = '\0';
-  snprintf(x_header, sizeof(x_header), "X-Auth-User: %s", username);
-  curl_slist *headers = curl_slist_append(NULL, x_header);
-  snprintf(x_header, sizeof(x_header), "X-Auth-Key: %s", password);
-  headers = curl_slist_append(headers, x_header);
+  curl_slist *headers = NULL;
+  add_header(&headers, "X-Auth-User", username);
+  add_header(&headers, "X-Auth-Key", password);
   CURL *curl = curl_easy_init();
   curl_easy_setopt(curl, CURLOPT_VERBOSE, debug);
   curl_easy_setopt(curl, CURLOPT_URL, authurl);

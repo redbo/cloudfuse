@@ -13,6 +13,7 @@
 #include <pthread.h>
 #include <pwd.h>
 #include <fcntl.h>
+#include <signal.h>
 #include "cloudfsapi.h"
 #include "config.h"
 
@@ -465,6 +466,7 @@ int main(int argc, char **argv)
   };
 
   pthread_mutex_init(&dmut, NULL);
+  signal(SIGPIPE, SIG_IGN);
   return fuse_main(argc, argv, &cfs_oper, NULL);
 }
 
