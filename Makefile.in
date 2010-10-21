@@ -6,6 +6,7 @@ CFLAGS = @CFLAGS@ @XML_CFLAGS@
 LDFLAGS = @LDFLAGS@
 LIBS = @LIBS@ @XML_LIBS@
 INSTALL = @INSTALL@
+MKDIR_P = @MKDIR_P@
 prefix = @prefix@
 exec_prefix = @exec_prefix@
 REQLIBS=-lcurl -lfuse
@@ -17,11 +18,14 @@ MISC=configure mkinstalldirs install-sh
 
 all: cloudfuse
 
-install: all
+install: all $(bindir)
 	$(INSTALL) cloudfuse $(bindir)/cloudfuse
 
 uninstall:
 	/bin/rm -f $(bindir)/cloudfuse
+
+$(bindir):
+	$(MKDIR_P) $(bindir)
 
 cloudfuse: $(SOURCES) $(HEADERS)
 	$(CC) $(CFLAGS) -o cloudfuse $(SOURCES) $(LIBS)
