@@ -9,9 +9,7 @@ objects.
 BUILDING:
 
     You'll need libcurl, fuse, and libxml2 (and possibly their dev packages)
-    installed to build it.  If libmagic is available at compile time, it will
-    be used as a fallback when the content-type can't be guessed based on file
-    extension.
+    installed to build it.
 
     Cloudfuse is built and installed like any other autoconf configured code.
     Normally,
@@ -30,7 +28,6 @@ USE:
     The following settings are optional:
         use_snet=[True to use snet for connections]
         cache_timeout=[seconds for directory caching, default 600]
-        mimetypes=[mime.types file, defaults to /etc/mime.types]
         authurl=[authentication url, used mostly for testing]
 
     To run it, the syntax should be as simple as:

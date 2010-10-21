@@ -32,9 +32,6 @@
 /* Define to 1 if you have the `fuse' library (-lfuse). */
 #undef HAVE_LIBFUSE
 
-/* Define to 1 if you have the `magic' library (-lmagic). */
-#undef HAVE_LIBMAGIC
-
 /* Define to 1 if you have the `xml2' library (-lxml2). */
 #undef HAVE_LIBXML2
 

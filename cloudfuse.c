@@ -397,7 +397,6 @@ int main(int argc, char **argv)
   char line[1024];
   char username[sizeof(line)] = "", api_key[sizeof(line)] = "",
        settings_filename[sizeof(line)] = "", use_snet[sizeof(line)] = "",
-       mimetypes[sizeof(line)] = "/etc/mime.types",
        authurl[MAX_URL_SIZE] = "https://auth.api.rackspacecloud.com/v1.0";
   FILE *settings;
   int foreground = 0;
@@ -415,7 +414,6 @@ int main(int argc, char **argv)
       sscanf(line, " cache_timeout = %d", &cache_timeout);
       sscanf(line, " authurl = %[^\r\n ]", authurl);
       sscanf(line, " use_snet = %[^\r\n ]", use_snet);
-      sscanf(line, " mimetypes = %[^\r\n ]", mimetypes);
     }
     fclose(settings);
   }
@@ -428,11 +426,9 @@ int main(int argc, char **argv)
     fprintf(stderr, "These entries are optional:\n\n");
     fprintf(stderr, "  cache_timeout=[seconds for directory caching]\n");
     fprintf(stderr, "  use_snet=[True to connect to snet]\n");
-    fprintf(stderr, "  mimetypes=[defaults to /etc/mime.types]\n");
     fprintf(stderr, "  authurl=[used for testing]\n");
     return 1;
   }
-  load_mimetypes(mimetypes);
 
   fuse_parse_cmdline(&args, NULL, NULL, &foreground);
   cloudfs_debug(foreground);

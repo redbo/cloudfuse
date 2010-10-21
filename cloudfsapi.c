@@ -14,47 +14,12 @@
 #include "cloudfsapi.h"
 #include "config.h"
 
-#ifdef HAVE_LIBMAGIC
-#include <magic.h>
-static magic_t magic_cookie;
-#endif
-
 static char storage_url[MAX_URL_SIZE];
 static char storage_token[MAX_HEADER_SIZE];
 static pthread_mutex_t pool_mut;
 static CURL *curl_pool[1024];
 static int curl_pool_count = 0;
-static char *(*extensions)[2] = NULL;
 static int debug = 0;
-
-static void add_mime_type(char *ext, char *type)
-{
-  static int ext_size = 0;
-  static int ext_count = 0;
-  if ((ext_count + 2) > ext_size)
-    extensions = realloc(extensions, (ext_size += 100) * sizeof(char *) * 2);
-  extensions[ext_count+1][0] = NULL;
-  extensions[ext_count][0] = strdup(ext);
-  extensions[ext_count++][1] = strdup(type);
-}
-
-static const char *file_content_type(FILE *fp, const char *path)
-{
-  int i;
-  const char *ext;
-  if ((ext = rindex(path, '.')) && *(++ext))
-    for (i = 0; extensions[i][0]; i++)
-      if (!strcasecmp(extensions[i][0], ext))
-        return extensions[i][1];
-#ifdef HAVE_LIBMAGIC
-  char buf[1024];
-  i = fread(buf, 1, sizeof(buf), fp);
-  rewind(fp);
-  if ((ext = magic_buffer(magic_cookie, buf, i)))
-    return ext;
-#endif
-  return "application/octet-stream";
-}
 
 static void rewrite_url_snet(char *url)
 {
@@ -141,7 +106,6 @@ static int send_request(char *method, const char *path, FILE *fp, xmlParserCtxtP
     curl_easy_setopt(curl, CURLOPT_UPLOAD, 1);
     curl_easy_setopt(curl, CURLOPT_INFILESIZE, file_size(fileno(fp)));
     curl_easy_setopt(curl, CURLOPT_READDATA, fp);
-    add_header(&headers, "Content-Type", file_content_type(fp, path));
   }
   else if (!strcasecmp(method, "HEAD"))
   {
@@ -196,41 +160,6 @@ static int send_request(char *method, const char *path, FILE *fp, xmlParserCtxtP
 /*
  * Public interface
  */
-
-void load_mimetypes(const char *filename)
-{
-  int i, count;
-  FILE *fp;
-  char line[1024], type[sizeof(line)], ext[7][sizeof(line)], *comment;
-  char *common_types[][2] = {
-    {"gif", "image/gif"}, {"png", "image/png"}, {"jpeg", "image/jpeg"},
-    {"jpg", "image/jpeg"}, {"css", "text/css"}, {"xml", "text/xml"},
-    {"html", "text/html"}, {"htm", "text/html"}, {"txt", "text/plain"},
-    {"bmp", "image/x-ms-bmp"}, {"mpeg", "video/mpeg"}, {"mpg", "video/mpeg"},
-    {"mov", "video/quicktime"}, {"mp3", "audio/mpeg"}, {"wav", "audio/x-wav"},
-    {"doc", "application/msword"}, {"ppt", "application/vnd.ms-powerpoint"},
-    {"zip", "application/zip"}, {"js", "application/x-javascript"},
-    {"pdf", "application/pdf"}, {"xhtml", "application/xhtml+xml"},
-    {"swf", "application/x-shockwave-flash"}, {"avi", "video/x-msvideo"},
-    {"jar", "application/java-archive"}, {"7z", "application/x-7z-compressed"},
-    {"rar", "application/rar"}, {"iso", "application/x-iso9660-image"},
-    {"tar", "application/x-tar"}, {NULL}
-  };
-  for (i = 0; common_types[i][0]; i++)
-    add_mime_type(common_types[i][0], common_types[i][1]);
-  if (!(fp = fopen(filename, "r")))
-    return;
-  while (fgets(line, sizeof(line), fp))
-  {
-    if ((comment = strstr(line, "#")))
-      *comment = '\0';
-    count = sscanf(line, " %s %s %s %s %s %s %s %s ", type, ext[0], ext[1],
-            ext[2], ext[3], ext[4], ext[5], ext[6]);
-    for (i = 0; i < count - 1; i++)
-      add_mime_type(ext[i], type);
-  }
-  fclose(fp);
-}
 
 int object_read_fp(const char *path, FILE *fp)
 {
@@ -415,12 +344,6 @@ int cloudfs_connect(char *username, char *password, char *authurl, int use_snet)
     strncpy(reconnect_args.password, password, sizeof(reconnect_args.password));
     strncpy(reconnect_args.authurl, authurl, sizeof(reconnect_args.authurl));
     reconnect_args.use_snet = use_snet;
-    #ifdef HAVE_LIBMAGIC
-    magic_cookie = magic_open(MAGIC_MIME);
-    if (magic_load(magic_cookie, NULL))
-      if (magic_load(magic_cookie, "/usr/share/misc/magic"))
-         magic_load(magic_cookie, "/usr/share/file/magic");
-    #endif
     initialized = 1;
   }
   else

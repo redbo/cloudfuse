@@ -15,7 +15,6 @@ AC_PROG_INSTALL
 AC_CHECK_LIB([curl], [curl_easy_init], , AC_MSG_ERROR([unable to link libcurl]))
 AC_CHECK_LIB([fuse], [fuse_main], , AC_MSG_ERROR([unable to link libfuse]))
 AC_CHECK_LIB([xml2], [xmlCreatePushParserCtxt], , AC_MSG_ERROR([unable to link libxml2]))
-AC_CHECK_LIB([magic], [magic_buffer])
 
 # Checks for header files.
 AC_FUNC_ALLOCA
