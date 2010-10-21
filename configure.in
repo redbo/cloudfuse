@@ -30,7 +30,7 @@ AC_CHECK_HEADER([fuse.h], , AC_MSG_ERROR([unable to find libfuse headers]),
 # Checks for header files.
 AC_FUNC_ALLOCA
 AC_HEADER_STDC
-AC_CHECK_HEADERS([fcntl.h stdlib.h string.h strings.h sys/time.h unistd.h pthread.h])
+AC_CHECK_HEADERS([fcntl.h stdint.h stdlib.h string.h strings.h sys/time.h unistd.h pthread.h])
 
 PKG_CHECK_MODULES([XML], libxml-2.0 >= 2.0, , AC_MSG_ERROR([unable to get libxml2 information]))
 

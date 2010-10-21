@@ -14,6 +14,7 @@
 #include <pwd.h>
 #include <fcntl.h>
 #include <signal.h>
+#include <stdint.h>
 #include "cloudfsapi.h"
 #include "config.h"
 
@@ -216,7 +217,7 @@ static int cfs_fgetattr(const char *path, struct stat *stbuf, struct fuse_file_i
 {
   if (info->fh)
   {
-    stbuf->st_size = file_size(((openfile *)info->fh)->fd);
+    stbuf->st_size = file_size(((openfile *)(long)info->fh)->fd);
     stbuf->st_mode = S_IFREG | 0666;
     stbuf->st_nlink = 1;
     return 0;
@@ -253,7 +254,7 @@ static int cfs_create(const char *path, mode_t mode, struct fuse_file_info *info
   of->fd = dup(fileno(temp_file));
   fclose(temp_file);
   of->flags = info->flags;
-  info->fh = (long)of;
+  info->fh = (uintptr_t)of;
   update_dir_cache(path, 0, 0);
   info->direct_io = 1;
   return 0;
@@ -275,19 +276,19 @@ static int cfs_open(const char *path, struct fuse_file_info *info)
   of->fd = dup(fileno(temp_file));
   fclose(temp_file);
   of->flags = info->flags;
-  info->fh = (long)of;
+  info->fh = (uintptr_t)of;
   info->direct_io = 1;
   return 0;
 }
 
 static int cfs_read(const char *path, char *buf, size_t size, off_t offset, struct fuse_file_info *info)
 {
-  return pread(((openfile *)info->fh)->fd, buf, size, offset);
+  return pread(((openfile *)(uintptr_t)info->fh)->fd, buf, size, offset);
 }
 
 static int cfs_flush(const char *path, struct fuse_file_info *info)
 {
-  openfile *of = (openfile *)info->fh;
+  openfile *of = (openfile *)(uintptr_t)info->fh;
   if (of)
   {
     update_dir_cache(path, file_size(of->fd), 0);
@@ -308,7 +309,7 @@ static int cfs_flush(const char *path, struct fuse_file_info *info)
 
 static int cfs_release(const char *path, struct fuse_file_info *info)
 {
-  close(((openfile *)info->fh)->fd);
+  close(((openfile *)(uintptr_t)info->fh)->fd);
   return 0;
 }
 
@@ -324,7 +325,7 @@ static int cfs_rmdir(const char *path)
 
 static int cfs_ftruncate(const char *path, off_t size, struct fuse_file_info *info)
 {
-  if (ftruncate(((openfile *)info->fh)->fd, size))
+  if (ftruncate(((openfile *)(uintptr_t)info->fh)->fd, size))
     return -errno;
   lseek(info->fh, 0, SEEK_SET);
   update_dir_cache(path, size, 0);
@@ -334,7 +335,7 @@ static int cfs_ftruncate(const char *path, off_t size, struct fuse_file_info *in
 static int cfs_write(const char *path, const char *buf, size_t length, off_t offset, struct fuse_file_info *info)
 {
   update_dir_cache(path, offset + length, 0);
-  return pwrite(((openfile *)info->fh)->fd, buf, length, offset);
+  return pwrite(((openfile *)(uintptr_t)info->fh)->fd, buf, length, offset);
 }
 
 static int cfs_unlink(const char *path)
