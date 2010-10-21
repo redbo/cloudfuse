@@ -102,7 +102,6 @@ static int send_request(char *method, const char *path, FILE *fp, xmlParserCtxtP
   }
   else if (!strcasecmp(method, "PUT") && fp)
   {
-    char x_header[MAX_HEADER_SIZE];
     curl_easy_setopt(curl, CURLOPT_UPLOAD, 1);
     curl_easy_setopt(curl, CURLOPT_INFILESIZE, file_size(fileno(fp)));
     curl_easy_setopt(curl, CURLOPT_READDATA, fp);
@@ -131,7 +130,6 @@ static int send_request(char *method, const char *path, FILE *fp, xmlParserCtxtP
     sleep(5);
     if (response == 401) // re-authenticate on 401s
     {
-      char x_header[MAX_HEADER_SIZE];
       debugf("Re-authenticating");
       if (!cloudfs_connect(0, 0, 0, 0))
         return response;
@@ -331,7 +329,6 @@ int cloudfs_connect(char *username, char *password, char *authurl, int use_snet)
   } reconnect_args;
 
   long response = -1;
-  char x_header[MAX_HEADER_SIZE];
   static int initialized = 0;
 
   if (!initialized)
