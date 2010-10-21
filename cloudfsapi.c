@@ -128,8 +128,7 @@ static int send_request(char *method, const char *path, FILE *fp, xmlParserCtxtP
   curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response);
   if (response >= 500 || response == 401) // retry on failures
   {
-    struct timeval wait = {5, 0}; // sleep 5 seconds
-    select(0, NULL, NULL, NULL, &wait);
+    sleep(5);
     if (response == 401) // re-authenticate on 401s
     {
       char x_header[MAX_HEADER_SIZE];

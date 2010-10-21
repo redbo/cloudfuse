@@ -26,7 +26,10 @@ AC_CHECK_HEADER([fuse.h], , AC_MSG_ERROR([unable to find libfuse headers]),
 #define _FILE_OFFSET_BITS 64
 #endif
 ])
-AC_CHECK_HEADERS([fcntl.h stdlib.h string.h unistd.h strings.h pwd.h alloca.h pthread.h])
+# Checks for header files.
+AC_FUNC_ALLOCA
+AC_HEADER_STDC
+AC_CHECK_HEADERS([fcntl.h stdlib.h string.h strings.h sys/time.h unistd.h pthread.h])
 
 PKG_CHECK_MODULES([XML], libxml-2.0 >= 2.0, , AC_MSG_ERROR([unable to get libxml2 information]))
 
@@ -41,7 +44,9 @@ AC_STRUCT_TM
 # Checks for library functions.
 AC_FUNC_MALLOC
 AC_FUNC_MKTIME
-AC_FUNC_REALLOC
+AC_FUNC_SELECT_ARGTYPES
+AC_TYPE_SIGNAL
+AC_FUNC_VPRINTF
 AC_CHECK_FUNCS([ftruncate memmove strcasecmp strchr strdup strncasecmp strrchr strstr])
 
 AC_CONFIG_FILES([Makefile])
