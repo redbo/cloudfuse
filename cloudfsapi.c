@@ -174,9 +174,8 @@ int object_write_fp(const char *path, FILE *fp)
   int response = send_request("GET", encoded, fp, NULL);
   curl_free(encoded);
   fflush(fp);
-  if (response >= 200 && response < 300)
+  if ((response >= 200 && response < 300) || ftruncate(fileno(fp), 0))
     return 1;
-  ftruncate(fileno(fp), 0);
   rewind(fp);
   return 0;
 }

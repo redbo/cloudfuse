@@ -324,7 +324,8 @@ static int cfs_rmdir(const char *path)
 
 static int cfs_ftruncate(const char *path, off_t size, struct fuse_file_info *info)
 {
-  ftruncate(((openfile *)info->fh)->fd, size);
+  if (ftruncate(((openfile *)info->fh)->fd, size))
+    return -errno;
   lseek(info->fh, 0, SEEK_SET);
   update_dir_cache(path, size, 0);
   return 0;
