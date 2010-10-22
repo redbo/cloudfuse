@@ -11,6 +11,7 @@
 #include <sys/types.h>
 #include <sys/time.h>
 #include <libxml/tree.h>
+#include <errno.h>
 #include "cloudfsapi.h"
 #include "config.h"
 
@@ -154,9 +155,169 @@ static int send_request(char *method, const char *path, FILE *fp, xmlParserCtxtP
   return response;
 }
 
+typedef struct object_file {
+  char buffer[CURL_MAX_WRITE_SIZE];
+  int pos;
+  int closed;
+  size_t offset;
+  long response;
+  CURL *handle;
+  CURLM *multi_handle;
+} object_file;
+
+static size_t object_write_func(void *ptr, size_t size, size_t nmemb, void *object)
+{
+  object_file *obj = (object_file *)object;
+  if (obj->pos == sizeof(obj->buffer))
+    return CURL_WRITEFUNC_PAUSE;
+  size *= nmemb;
+  if (size > sizeof(obj->buffer) - obj->pos)
+    size = sizeof(obj->buffer) - obj->pos;
+  memcpy(obj->buffer + obj->pos, ptr, size);
+  obj->pos += size;
+  return size;
+}
+
+static size_t object_read_func(void *ptr, size_t size, size_t nmemb, void *object)
+{
+  object_file *obj = (object_file *)object;
+  if (!obj->pos)
+  {
+    if (obj->closed)
+      return 0;
+    return CURL_READFUNC_PAUSE;
+  }
+  size *= nmemb;
+  if (size > obj->pos)
+    size = obj->pos;
+  memcpy(ptr, obj->buffer, size);
+  memmove(obj->buffer, obj->buffer + size, sizeof(obj->buffer) - size);
+  obj->pos -= size;
+  return size;
+}
+
+static int do_multi_transfer(CURL *handle, CURLM *multi_handle)
+{
+  fd_set readers;
+  fd_set writers;
+  fd_set exers;
+  int maxfd;
+  int still_running;
+  curl_easy_pause(handle, CURLPAUSE_CONT);
+  FD_ZERO(&readers);
+  FD_ZERO(&writers);
+  FD_ZERO(&exers);
+  curl_multi_fdset(multi_handle, &readers, &writers, &exers, &maxfd);
+  if (maxfd >= 0)
+    select(maxfd+1, &readers, &writers, &exers, NULL);
+  while (curl_multi_perform(multi_handle, &still_running) ==
+          CURLM_CALL_MULTI_PERFORM);
+  return still_running;
+}
+
 /*
  * Public interface
  */
+
+void *object_open(const char *path, char mode)
+{
+  char *encoded = curl_escape(path, 0);
+  CURL *curl = get_connection(encoded);
+  curl_slist *headers = NULL;
+  curl_free(encoded);
+  object_file *obj = (object_file *)malloc(sizeof(object_file));
+  obj->pos = 0;
+  obj->offset = 0;
+  obj->closed = 0;
+  obj->response = -1;
+  obj->multi_handle = curl_multi_init();
+  obj->handle = curl;
+  add_header(&headers, "X-Auth-Token", storage_token);
+  if (mode == 'w')
+  {
+    curl_easy_setopt(curl, CURLOPT_UPLOAD, 1);
+    curl_easy_setopt(curl, CURLOPT_READFUNCTION, &object_read_func);
+    curl_easy_setopt(curl, CURLOPT_READDATA, obj);
+  }
+  else
+  {
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, &object_write_func);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, obj);
+  }
+  curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+  curl_multi_add_handle(obj->multi_handle, obj->handle);
+  do_multi_transfer(obj->handle, obj->multi_handle);
+  curl_slist_free_all(headers);
+  return obj;
+}
+
+int object_complete(void *object)
+{
+  object_file *obj = (object_file *)object;
+  if (!obj->closed)
+  {
+    obj->closed = 1;
+    while (do_multi_transfer(obj->handle, obj->multi_handle));
+    curl_easy_getinfo(obj->handle, CURLINFO_RESPONSE_CODE, &obj->response);
+    CURLMsg *msg;
+    int msg_count;
+    while ((msg = curl_multi_info_read(obj->multi_handle, &msg_count)))
+    {
+      if (msg->data.result != CURLE_OK)
+      {
+        debugf("result != CURLE_OK, assuming error: %s",
+                    curl_easy_strerror(msg->data.result));
+        obj->response = 500;
+      }
+    }
+    curl_multi_remove_handle(obj->multi_handle, obj->handle);
+    return_connection(obj->handle);
+    curl_multi_cleanup(obj->multi_handle);
+    debugf("Finalizing object with response code %ld", obj->response);
+  }
+  return (obj->response >= 200 && obj->response < 300);
+}
+
+void object_free(void *object)
+{
+  object_complete(object);
+  free(object);
+}
+
+int object_read(void *object, char *buffer, int len, size_t offset)
+{
+  object_file *obj = (object_file *)object;
+  if (obj->offset != offset)
+    return -1; // TODO figure this out
+  while (!obj->pos)
+    if (!do_multi_transfer(obj->handle, obj->multi_handle))
+      return -EIO;
+  if (len > obj->pos)
+    len = obj->pos;
+  memcpy(buffer, obj->buffer, len);
+  memmove(obj->buffer, obj->buffer + len, sizeof(obj->buffer) - len);
+  obj->pos -= len;
+  obj->offset += len;
+  return len;
+}
+
+int object_write(void *object, const char *buffer, int len, size_t offset)
+{
+  object_file *obj = (object_file *)object;
+  if (obj->offset != offset)
+    return -1; // TODO figure this out
+  while (obj->pos == sizeof(obj->buffer))
+    if (!do_multi_transfer(obj->handle, obj->multi_handle))
+      return -EIO;
+  if (len > sizeof(obj->buffer) - obj->pos)
+    len = sizeof(obj->buffer) - obj->pos;
+  memcpy(obj->buffer + obj->pos, buffer, len);
+  obj->pos += len;
+  obj->offset += len;
+  if (!do_multi_transfer(obj->handle, obj->multi_handle))
+    return -EIO;
+  return len;
+}
 
 int object_read_fp(const char *path, FILE *fp)
 {
