@@ -217,7 +217,7 @@ static int cfs_fgetattr(const char *path, struct stat *stbuf, struct fuse_file_i
 {
   if (info->fh)
   {
-    stbuf->st_size = file_size(((openfile *)(long)info->fh)->fd);
+    stbuf->st_size = file_size(((openfile *)(uintptr_t)info->fh)->fd);
     stbuf->st_mode = S_IFREG | 0666;
     stbuf->st_nlink = 1;
     return 0;
