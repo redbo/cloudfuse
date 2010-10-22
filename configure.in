@@ -16,6 +16,7 @@ AC_PROG_MKDIR_P
 AC_CHECK_LIB([curl], [curl_easy_init], , AC_MSG_ERROR([unable to link libcurl]))
 AC_CHECK_LIB([fuse], [fuse_main], , AC_MSG_ERROR([unable to link libfuse]))
 AC_CHECK_LIB([xml2], [xmlCreatePushParserCtxt], , AC_MSG_ERROR([unable to link libxml2]))
+PKG_CHECK_MODULES([REQLIBS], [libxml-2.0 >= 2.0 libcurl >= 2.0 fuse >= 2.0])
 
 # Checks for header files.
 AC_FUNC_ALLOCA
@@ -27,12 +28,7 @@ AC_CHECK_HEADER([fuse.h], , AC_MSG_ERROR([unable to find libfuse headers]),
 #define _FILE_OFFSET_BITS 64
 #endif
 ])
-# Checks for header files.
-AC_FUNC_ALLOCA
-AC_HEADER_STDC
 AC_CHECK_HEADERS([fcntl.h stdint.h stdlib.h string.h strings.h sys/time.h unistd.h pthread.h])
-
-PKG_CHECK_MODULES([XML], libxml-2.0 >= 2.0, , AC_MSG_ERROR([unable to get libxml2 information]))
 
 # Checks for typedefs, structures, and compiler characteristics.
 AC_C_CONST
