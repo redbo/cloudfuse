@@ -18,6 +18,9 @@
    */
 #undef HAVE_ALLOCA_H
 
+/* Define to 1 if you have the <curl/curl.h> header file. */
+#undef HAVE_CURL_CURL_H
+
 /* Define to 1 if you don't have `vprintf' but do have `_doprnt.' */
 #undef HAVE_DOPRNT
 
@@ -27,17 +30,14 @@
 /* Define to 1 if you have the `ftruncate' function. */
 #undef HAVE_FTRUNCATE
 
+/* Define to 1 if you have the <fuse.h> header file. */
+#undef HAVE_FUSE_H
+
 /* Define to 1 if you have the <inttypes.h> header file. */
 #undef HAVE_INTTYPES_H
 
-/* Define to 1 if you have the `curl' library (-lcurl). */
-#undef HAVE_LIBCURL
-
-/* Define to 1 if you have the `fuse' library (-lfuse). */
-#undef HAVE_LIBFUSE
-
-/* Define to 1 if you have the `xml2' library (-lxml2). */
-#undef HAVE_LIBXML2
+/* Define to 1 if you have the <libxml/tree.h> header file. */
+#undef HAVE_LIBXML_TREE_H
 
 /* Define to 1 if your system has a GNU libc compatible `malloc' function, and
    to 0 otherwise. */
@@ -82,12 +82,6 @@
 /* Define to 1 if you have the `strstr' function. */
 #undef HAVE_STRSTR
 
-/* Define to 1 if you have the <sys/select.h> header file. */
-#undef HAVE_SYS_SELECT_H
-
-/* Define to 1 if you have the <sys/socket.h> header file. */
-#undef HAVE_SYS_SOCKET_H
-
 /* Define to 1 if you have the <sys/stat.h> header file. */
 #undef HAVE_SYS_STAT_H
 
@@ -120,15 +114,6 @@
 
 /* Define as the return type of signal handlers (`int' or `void'). */
 #undef RETSIGTYPE
-
-/* Define to the type of arg 1 for `select'. */
-#undef SELECT_TYPE_ARG1
-
-/* Define to the type of args 2, 3 and 4 for `select'. */
-#undef SELECT_TYPE_ARG234
-
-/* Define to the type of arg 5 for `select'. */
-#undef SELECT_TYPE_ARG5
 
 /* If using the C implementation of alloca, define if you know the
    direction of stack growth for your system; otherwise it will be

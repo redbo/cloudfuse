@@ -13,22 +13,14 @@ AC_PROG_INSTALL
 AC_PROG_MKDIR_P
 
 # Checks for libraries.
-AC_CHECK_LIB([curl], [curl_easy_init], , AC_MSG_ERROR([unable to link libcurl]))
-AC_CHECK_LIB([fuse], [fuse_main], , AC_MSG_ERROR([unable to link libfuse]))
-AC_CHECK_LIB([xml2], [xmlCreatePushParserCtxt], , AC_MSG_ERROR([unable to link libxml2]))
-PKG_CHECK_MODULES([REQLIBS], [libxml-2.0 >= 2.0 libcurl >= 2.0 fuse >= 2.0])
+PKG_CHECK_MODULES(XML, libxml-2.0 >= 2.0, , AC_MSG_ERROR('Unable to find libxml2. Please make sure library and header files are installed.'))
+PKG_CHECK_MODULES(CURL, libcurl >= 2.0, , AC_MSG_ERROR('Unable to find libcurl.  Please make sure library and header files are installed.'))
+PKG_CHECK_MODULES(FUSE, fuse >= 2.0, , AC_MSG_ERROR('Unable to find libfuse.  Please make sure library and header files are installed.'))
 
 # Checks for header files.
 AC_FUNC_ALLOCA
 AC_HEADER_STDC
-AC_CHECK_HEADER([curl/curl.h], , AC_MSG_ERROR([unable to find libcurl headers]))
-AC_CHECK_HEADER([fuse.h], , AC_MSG_ERROR([unable to find libfuse headers]),
-[
-#ifndef _FILE_OFFSET_BITS
-#define _FILE_OFFSET_BITS 64
-#endif
-])
-AC_CHECK_HEADERS([fcntl.h stdint.h stdlib.h string.h strings.h sys/time.h unistd.h pthread.h])
+AC_CHECK_HEADERS([fcntl.h stdint.h stdlib.h string.h strings.h sys/time.h unistd.h pthread.h fuse.h curl/curl.h libxml/tree.h])
 
 # Checks for typedefs, structures, and compiler characteristics.
 AC_C_CONST
@@ -41,7 +33,6 @@ AC_STRUCT_TM
 # Checks for library functions.
 AC_FUNC_MALLOC
 AC_FUNC_MKTIME
-AC_FUNC_SELECT_ARGTYPES
 AC_TYPE_SIGNAL
 AC_FUNC_VPRINTF
 AC_CHECK_FUNCS([ftruncate memmove strcasecmp strchr strdup strncasecmp strrchr strstr])
