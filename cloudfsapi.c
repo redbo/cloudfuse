@@ -106,11 +106,6 @@ static int send_request(char *method, const char *path, FILE *fp, xmlParserCtxtP
     curl_easy_setopt(curl, CURLOPT_INFILESIZE, file_size(fileno(fp)));
     curl_easy_setopt(curl, CURLOPT_READDATA, fp);
   }
-  else if (!strcasecmp(method, "HEAD"))
-  {
-    curl_easy_setopt(curl, CURLOPT_NOBODY, 1);
-    curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, method);
-  }
   else
   {
     curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, method);
