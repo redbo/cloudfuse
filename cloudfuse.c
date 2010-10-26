@@ -1,5 +1,4 @@
 #define FUSE_USE_VERSION 26
-#define _FILE_OFFSET_BITS 64
 #define _XOPEN_SOURCE 500
 #include <fuse.h>
 #include <stdio.h>
