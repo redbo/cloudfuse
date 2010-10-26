@@ -1,5 +1,4 @@
 #define FUSE_USE_VERSION 26
-#define _FILE_OFFSET_BITS 64
 #define _XOPEN_SOURCE 500
 #include <fuse.h>
 #include <stdio.h>
@@ -215,9 +214,10 @@ static int cfs_getattr(const char *path, struct stat *stbuf)
 
 static int cfs_fgetattr(const char *path, struct stat *stbuf, struct fuse_file_info *info)
 {
-  if (info->fh)
+  openfile *of = (openfile *)(uintptr_t)info->fh;
+  if (of)
   {
-    stbuf->st_size = file_size(((openfile *)(uintptr_t)info->fh)->fd);
+    stbuf->st_size = file_size(of->fd);
     stbuf->st_mode = S_IFREG | 0666;
     stbuf->st_nlink = 1;
     return 0;
@@ -325,9 +325,10 @@ static int cfs_rmdir(const char *path)
 
 static int cfs_ftruncate(const char *path, off_t size, struct fuse_file_info *info)
 {
-  if (ftruncate(((openfile *)(uintptr_t)info->fh)->fd, size))
+  openfile *of = (openfile *)(uintptr_t)info->fh;
+  if (ftruncate(of->fd, size))
     return -errno;
-  lseek(info->fh, 0, SEEK_SET);
+  lseek(of->fd, 0, SEEK_SET);
   update_dir_cache(path, size, 0);
   return 0;
 }
