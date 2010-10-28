@@ -126,10 +126,16 @@ static int send_request(char *method, const char *path, FILE *fp, xmlParserCtxtP
     if (response == 401) // re-authenticate on 401s
     {
       debugf("Re-authenticating");
+      curl_slist_free_all(headers);
+      headers = NULL;
       if (!cloudfs_connect(0, 0, 0, 0))
+      {
+        return_connection(curl);
         return response;
-      add_header(&headers, "X-Auth-Token", "");
+      }
       add_header(&headers, "X-Auth-Token", storage_token);
+      if (!strcasecmp(method, "MKDIR"))
+        add_header(&headers, "Content-Type", "application/directory");
       curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
     }
     if (xmlctx)
