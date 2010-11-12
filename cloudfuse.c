@@ -206,6 +206,9 @@ static int cfs_getattr(const char *path, struct stat *stbuf)
   else
   {
     stbuf->st_size = de->size;
+    /* calc. blocks as if 4K blocksize filesystem; stat uses units of 512B */
+    stbuf->st_blocks = ((4095 + de->size) / 4096) * 8;
+    fprintf(stderr, "size %ld blocks %ld\n", de->size, stbuf->st_blocks);
     stbuf->st_mode = S_IFREG | 0666;
     stbuf->st_nlink = 1;
   }
@@ -362,8 +365,8 @@ static int cfs_truncate(const char *path, off_t size)
 
 static int cfs_statfs(const char *path, struct statvfs *stat)
 {
-  stat->f_bsize = 2048;
-  stat->f_frsize = 2408;
+  stat->f_bsize = 4096;
+  stat->f_frsize = 4096;
   stat->f_blocks = INT_MAX;
   stat->f_bfree = stat->f_blocks;
   stat->f_bavail = stat->f_blocks;
