@@ -18,7 +18,7 @@ typedef struct dir_entry
   char *name;
   char *full_name;
   char *content_type;
-  unsigned long size;
+  off_t size;
   time_t last_modified;
   int isdir;
   struct dir_entry *next;
@@ -35,7 +35,7 @@ void free_dir_list(dir_entry *dir_list);
 int object_truncate(const char *path, off_t size);
 
 void load_mimetypes(const char *filename);
-size_t file_size(int fd);
+off_t file_size(int fd);
 
 void debugf(char *fmt, ...);
 #endif

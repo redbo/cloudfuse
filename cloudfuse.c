@@ -29,7 +29,7 @@ typedef struct dir_cache
 static dir_cache *dcache;
 static pthread_mutex_t dmut;
 
-typedef struct openfile
+typedef struct
 {
   int fd;
   int flags;
@@ -85,7 +85,7 @@ int caching_list_directory(const char *path, dir_entry **list)
   return 1;
 }
 
-static void update_dir_cache(const char *path, int size, int isdir)
+static void update_dir_cache(const char *path, off_t size, int isdir)
 {
   pthread_mutex_lock(&dmut);
   dir_cache *cw;

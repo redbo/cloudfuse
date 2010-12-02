@@ -314,7 +314,7 @@ void cloudfs_debug(int dbg)
   debug = dbg;
 }
 
-size_t file_size(int fd)
+off_t file_size(int fd)
 {
   struct stat buf;
   fstat(fd, &buf);
