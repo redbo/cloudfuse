@@ -17,7 +17,7 @@
 #include "cloudfsapi.h"
 #include "config.h"
 
-int cache_timeout;
+static int cache_timeout;
 
 typedef struct dir_cache
 {
@@ -56,7 +56,7 @@ static dir_cache *new_cache(const char *path)
   return (dcache = cw);
 }
 
-int caching_list_directory(const char *path, dir_entry **list)
+static int caching_list_directory(const char *path, dir_entry **list)
 {
   pthread_mutex_lock(&dmut);
   if (!strcmp(path, "/"))
@@ -403,10 +403,7 @@ int main(int argc, char **argv)
   char settings_filename[MAX_PATH_SIZE] = "";
   FILE *settings;
   int foreground = 0;
-  struct fuse_args args = FUSE_ARGS_INIT(argc, argv),
-                   _tmpargs = FUSE_ARGS_INIT(argc, argv);
-  fuse_parse_cmdline(&_tmpargs, NULL, NULL, &foreground);
-  cloudfs_debug(foreground);
+  struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
 
   struct options {
       char *username;
@@ -414,12 +411,14 @@ int main(int argc, char **argv)
       char *cache_timeout;
       char *authurl;
       char *use_snet;
+      int foreground;
   } options = {
       .username = "",
       .api_key = "",
       .cache_timeout = "600",
       .authurl = "https://auth.api.rackspacecloud.com/v1.0",
       .use_snet = "false",
+      .foreground = 0,
   };
 
   struct fuse_opt cfs_opts[] =
@@ -429,33 +428,39 @@ int main(int argc, char **argv)
     {"cache_timeout=%s", offsetof(struct options, cache_timeout), 0},
     {"authurl=%s", offsetof(struct options, authurl), 0},
     {"use_snet=%s", offsetof(struct options, use_snet), 0},
+    {"debug", offsetof(struct options, foreground), 1},
+    {"-d", offsetof(struct options, foreground), 1},
+    {"-f", offsetof(struct options, foreground), 1},
     FUSE_OPT_END
   };
 
   fuse_opt_parse(&args, &options, cfs_opts, NULL);
 
-  snprintf(settings_filename, sizeof(settings_filename), "%s/.cloudfuse",
-           get_home_dir());
+  snprintf(settings_filename, sizeof(settings_filename), "%s/.cloudfuse", get_home_dir());
   if ((settings = fopen(settings_filename, "r")))
   {
-    char line[1024];
+    char line[1024], option[1024], value[1024];
     while (fgets(line, sizeof(line), settings))
     {
-      sscanf(line, " username = %a[^\r\n ]", options.username);
-      sscanf(line, " api_key = %a[^\r\n ]", options.api_key);
-      sscanf(line, " cache_timeout = %a[^\r\n ]", options.cache_timeout);
-      sscanf(line, " authurl = %a[^\r\n ]", options.authurl);
-      sscanf(line, " use_snet = %a[^\r\n ]", options.use_snet);
+      if (sscanf(line, " %[^=] = %[^\r\n ]", option, value) == 2)
+      {
+        snprintf(line, sizeof(line), "-o%s=%s", option, value);
+        char *tmp_argv[2] = {"", line};
+        struct fuse_args _tmpargs = FUSE_ARGS_INIT(2, tmp_argv);
+        fuse_opt_parse(&_tmpargs, &options, cfs_opts, NULL);
+      }
     }
     fclose(settings);
   }
 
   cache_timeout = atoi(options.cache_timeout);
+  cloudfs_debug(options.foreground);
 
   if (!*options.username || !*options.api_key)
   {
     fprintf(stderr, "Unable to determine username and API key.\n\n");
-    fprintf(stderr, "These can be set either as mount options or in a file named %s\n\n", settings_filename);
+    fprintf(stderr, "These can be set either as mount options or in"
+                    " a file named %s\n\n", settings_filename);
     fprintf(stderr, "  username=[Mosso username]\n");
     fprintf(stderr, "  api_key=[Mosso api key]\n\n");
     fprintf(stderr, "These entries are optional:\n\n");
@@ -469,11 +474,10 @@ int main(int argc, char **argv)
         !strcasecmp(options.use_snet, "true")))
   {
     fprintf(stderr, "Unable to authenticate.\n");
-    fprintf(stderr, "%s %s %s\n", options.username, options.api_key, options.authurl);
     return 1;
   }
 
-  static struct fuse_operations cfs_oper = {
+  struct fuse_operations cfs_oper = {
     .readdir = cfs_readdir,
     .mkdir = cfs_mkdir,
     .read = cfs_read,
@@ -496,6 +500,6 @@ int main(int argc, char **argv)
 
   pthread_mutex_init(&dmut, NULL);
   signal(SIGPIPE, SIG_IGN);
-  return fuse_main(args.argc, args.argv, &cfs_oper, NULL);
+  return fuse_main(args.argc, args.argv, &cfs_oper, &options);
 }
 
