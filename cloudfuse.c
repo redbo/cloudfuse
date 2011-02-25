@@ -1,5 +1,4 @@
 #define FUSE_USE_VERSION 26
-#define _XOPEN_SOURCE 500
 #include <fuse.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -14,10 +13,11 @@
 #include <fcntl.h>
 #include <signal.h>
 #include <stdint.h>
+#include <stddef.h>
 #include "cloudfsapi.h"
 #include "config.h"
 
-int cache_timeout = 600;
+int cache_timeout;
 
 typedef struct dir_cache
 {
@@ -400,33 +400,62 @@ char *get_home_dir()
 
 int main(int argc, char **argv)
 {
-  char line[1024];
-  char username[sizeof(line)] = "", api_key[sizeof(line)] = "",
-       settings_filename[sizeof(line)] = "", use_snet[sizeof(line)] = "",
-       authurl[MAX_URL_SIZE] = "https://auth.api.rackspacecloud.com/v1.0";
+  char settings_filename[MAX_PATH_SIZE] = "";
   FILE *settings;
   int foreground = 0;
-  struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
+  struct fuse_args args = FUSE_ARGS_INIT(argc, argv),
+                   _tmpargs = FUSE_ARGS_INIT(argc, argv);
+  fuse_parse_cmdline(&_tmpargs, NULL, NULL, &foreground);
+  cloudfs_debug(foreground);
 
-  char *home = get_home_dir();
-  snprintf(settings_filename, sizeof(settings_filename), "%s%s.cloudfuse",
-           home,  home[strlen(home)] == '/' ? "" : "/");
+  struct options {
+      char *username;
+      char *api_key;
+      char *cache_timeout;
+      char *authurl;
+      char *use_snet;
+  } options = {
+      .username = "",
+      .api_key = "",
+      .cache_timeout = "600",
+      .authurl = "https://auth.api.rackspacecloud.com/v1.0",
+      .use_snet = "false",
+  };
+
+  struct fuse_opt cfs_opts[] =
+  {
+    {"username=%s", offsetof(struct options, username), 0},
+    {"api_key=%s", offsetof(struct options, api_key), 0},
+    {"cache_timeout=%s", offsetof(struct options, cache_timeout), 0},
+    {"authurl=%s", offsetof(struct options, authurl), 0},
+    {"use_snet=%s", offsetof(struct options, use_snet), 0},
+    FUSE_OPT_END
+  };
+
+  fuse_opt_parse(&args, &options, cfs_opts, NULL);
+
+  snprintf(settings_filename, sizeof(settings_filename), "%s/.cloudfuse",
+           get_home_dir());
   if ((settings = fopen(settings_filename, "r")))
   {
+    char line[1024];
     while (fgets(line, sizeof(line), settings))
     {
-      sscanf(line, " username = %[^\r\n ]", username);
-      sscanf(line, " api_key = %[^\r\n ]", api_key);
-      sscanf(line, " cache_timeout = %d", &cache_timeout);
-      sscanf(line, " authurl = %[^\r\n ]", authurl);
-      sscanf(line, " use_snet = %[^\r\n ]", use_snet);
+      sscanf(line, " username = %a[^\r\n ]", options.username);
+      sscanf(line, " api_key = %a[^\r\n ]", options.api_key);
+      sscanf(line, " cache_timeout = %a[^\r\n ]", options.cache_timeout);
+      sscanf(line, " authurl = %a[^\r\n ]", options.authurl);
+      sscanf(line, " use_snet = %a[^\r\n ]", options.use_snet);
     }
     fclose(settings);
   }
-  if (!*username || !*api_key)
+
+  cache_timeout = atoi(options.cache_timeout);
+
+  if (!*options.username || !*options.api_key)
   {
-    fprintf(stderr, "Unable to read %s\n", settings_filename);
-    fprintf(stderr, "It should contain:\n\n");
+    fprintf(stderr, "Unable to determine username and API key.\n\n");
+    fprintf(stderr, "These can be set either as mount options or in a file named %s\n\n", settings_filename);
     fprintf(stderr, "  username=[Mosso username]\n");
     fprintf(stderr, "  api_key=[Mosso api key]\n\n");
     fprintf(stderr, "These entries are optional:\n\n");
@@ -436,13 +465,11 @@ int main(int argc, char **argv)
     return 1;
   }
 
-  fuse_parse_cmdline(&args, NULL, NULL, &foreground);
-  cloudfs_debug(foreground);
-
-  if (!cloudfs_connect(username, api_key, authurl,
-        !strncasecmp(use_snet, "true", sizeof(use_snet))))
+  if (!cloudfs_connect(options.username, options.api_key, options.authurl,
+        !strcasecmp(options.use_snet, "true")))
   {
     fprintf(stderr, "Unable to authenticate.\n");
+    fprintf(stderr, "%s %s %s\n", options.username, options.api_key, options.authurl);
     return 1;
   }
 
@@ -469,6 +496,6 @@ int main(int argc, char **argv)
 
   pthread_mutex_init(&dmut, NULL);
   signal(SIGPIPE, SIG_IGN);
-  return fuse_main(argc, argv, &cfs_oper, NULL);
+  return fuse_main(args.argc, args.argv, &cfs_oper, NULL);
 }
 

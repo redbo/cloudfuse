@@ -21,7 +21,8 @@ BUILDING:
 
 USE:
 
-    You'll have to put your Mosso username and API key in $HOME/.cloudfuse
+    Your Rackspace Cloud username and API key can be either be given as mount
+    options or put in a file named $HOME/.cloudfuse:
         username=[username]
         api_key=[api key]
 
