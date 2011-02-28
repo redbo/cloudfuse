@@ -402,7 +402,6 @@ int main(int argc, char **argv)
 {
   char settings_filename[MAX_PATH_SIZE] = "";
   FILE *settings;
-  int foreground = 0;
   struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
 
   struct options {
@@ -411,14 +410,12 @@ int main(int argc, char **argv)
       char *cache_timeout;
       char *authurl;
       char *use_snet;
-      int foreground;
   } options = {
       .username = "",
       .api_key = "",
       .cache_timeout = "600",
       .authurl = "https://auth.api.rackspacecloud.com/v1.0",
       .use_snet = "false",
-      .foreground = 0,
   };
 
   struct fuse_opt cfs_opts[] =
@@ -428,13 +425,17 @@ int main(int argc, char **argv)
     {"cache_timeout=%s", offsetof(struct options, cache_timeout), 0},
     {"authurl=%s", offsetof(struct options, authurl), 0},
     {"use_snet=%s", offsetof(struct options, use_snet), 0},
-    {"debug", offsetof(struct options, foreground), 1},
-    {"-d", offsetof(struct options, foreground), 1},
-    {"-f", offsetof(struct options, foreground), 1},
     FUSE_OPT_END
   };
 
-  fuse_opt_parse(&args, &options, cfs_opts, NULL);
+  int opt_proc(void *data, const char *arg, int key, struct fuse_args *outargs)
+  {
+    if (!strcmp(arg, "-f") || !strcmp(arg, "-d") || !strcmp(arg, "debug"))
+      cloudfs_debug(1);
+    return 1;
+  }
+
+  fuse_opt_parse(&args, &options, cfs_opts, opt_proc);
 
   snprintf(settings_filename, sizeof(settings_filename), "%s/.cloudfuse", get_home_dir());
   if ((settings = fopen(settings_filename, "r")))
@@ -442,19 +443,16 @@ int main(int argc, char **argv)
     char line[1024], option[1024], value[1024];
     while (fgets(line, sizeof(line), settings))
     {
-      if (sscanf(line, " %[^=] = %[^\r\n ]", option, value) == 2)
-      {
-        snprintf(line, sizeof(line), "-o%s=%s", option, value);
-        char *tmp_argv[2] = {"", line};
-        struct fuse_args _tmpargs = FUSE_ARGS_INIT(2, tmp_argv);
-        fuse_opt_parse(&_tmpargs, &options, cfs_opts, NULL);
-      }
+      sscanf(line, " username = %a[^\r\n ]", &options.username);
+      sscanf(line, " api_key = %a[^\r\n ]", &options.api_key);
+      sscanf(line, " cache_timeout = %a[^\r\n ]", &options.cache_timeout);
+      sscanf(line, " authurl = %a[^\r\n ]", &options.authurl);
+      sscanf(line, " use_snet = %a[^\r\n ]", &options.use_snet);
     }
     fclose(settings);
   }
 
   cache_timeout = atoi(options.cache_timeout);
-  cloudfs_debug(options.foreground);
 
   if (!*options.username || !*options.api_key)
   {
