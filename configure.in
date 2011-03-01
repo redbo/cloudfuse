@@ -20,7 +20,7 @@ PKG_CHECK_MODULES(FUSE, fuse, , AC_MSG_ERROR('Unable to find libfuse.  Please ma
 # Checks for header files.
 AC_FUNC_ALLOCA
 AC_HEADER_STDC
-AC_CHECK_HEADERS([fcntl.h stdint.h stdlib.h string.h strings.h sys/time.h unistd.h pthread.h fuse.h curl/curl.h libxml/tree.h])
+AC_CHECK_HEADERS([fcntl.h stdint.h stddef.h stdlib.h string.h strings.h sys/time.h unistd.h pthread.h fuse.h curl/curl.h libxml/tree.h])
 
 # Checks for typedefs, structures, and compiler characteristics.
 AC_C_CONST
@@ -35,6 +35,7 @@ AC_FUNC_MALLOC
 AC_FUNC_MKTIME
 AC_TYPE_SIGNAL
 AC_FUNC_VPRINTF
+AC_STRUCT_ST_BLOCKS
 AC_CHECK_FUNCS([ftruncate memmove strcasecmp strchr strdup strncasecmp strrchr strstr])
 AC_CHECK_LIB(curl, CRYPTO_set_locking_callback, [AC_DEFINE(HAVE_CURL_OPENSSL, , [libcurl compiled with openssl])])
 AC_CHECK_LIB(curl, gcry_control, [AC_DEFINE(HAVE_CURL_GNUTLS, , [libcurl compiled with gnutls])])
