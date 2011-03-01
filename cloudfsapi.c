@@ -38,12 +38,6 @@ static unsigned long thread_id()
 }
 #endif
 
-#ifdef HAVE_CURL_GNUTLS
-#include <gcrypt.h>
-#include <errno.h>
-GCRY_THREAD_OPTION_PTHREAD_IMPL;
-#endif
-
 void init_locks()
 {
   pthread_mutex_init(&pool_mut, NULL);
@@ -55,9 +49,6 @@ void init_locks()
     pthread_mutex_init(&(ssl_lockarray[i]), NULL);
   CRYPTO_set_id_callback((unsigned long (*)())thread_id);
   CRYPTO_set_locking_callback((void (*)())lock_callback);
-  #endif
-  #ifdef HAVE_CURL_GNUTLS
-  gcry_control(GCRYCTL_SET_THREAD_CBS);
   #endif
 }
 

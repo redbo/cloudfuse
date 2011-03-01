@@ -15,8 +15,8 @@ OpenStack project.
 
 BUILDING:
 
-    You'll need libcurl, fuse, and libxml2 (and probably their dev packages)
-    installed to build it.
+    You'll need libcurl, fuse, libssl, and libxml2 (and probably their dev
+    packages) installed to build it.
 
     Cloudfuse is built and installed like any other autoconf configured code.
     Normally,
