@@ -1,4 +1,5 @@
-Cloudfuse is a FUSE application which provides access to Rackspace's Cloud Files.
+Cloudfuse is a FUSE application which provides access to Rackspace's
+Cloud Files (or any installation of Swift).
 
 Cloud Files is a remote storage system which is similar in principle to
 Amazon S3.  It provides a simple RESTful interface to storing and retrieving
@@ -6,9 +7,15 @@ objects.
 
     http://www.rackspacecloud.com/cloud_hosting_products/files
 
+Swift, the software behind Cloud Files, has been open-sourced as part of the
+OpenStack project.
+
+    http://swift.openstack.org/
+
+
 BUILDING:
 
-    You'll need libcurl, fuse, and libxml2 (and possibly their dev packages)
+    You'll need libcurl, fuse, and libxml2 (and probably their dev packages)
     installed to build it.
 
     Cloudfuse is built and installed like any other autoconf configured code.
@@ -19,27 +26,32 @@ BUILDING:
 
     But I'm no autoconf wizard, and there may be dragons lurking there.
 
+
 USE:
 
-    Your Rackspace Cloud username and API key can be either be given as mount
-    options or put in a file named $HOME/.cloudfuse:
+    Your Rackspace Cloud username and API key can be placed in a file
+    named $HOME/.cloudfuse:
         username=[username]
         api_key=[api key]
 
-    The following settings are optional:
-        use_snet=[True to use snet for connections]
+    Or as mount options on the command line:
+        cloudfuse -o username=redbo,api_key=713aa... mountpoint/
+
+    Or as mount options in /etc/fstab:
+        cloudfuse /mnt/cloudfiles fuse username=redbo,api_key=713aa...,user 0 0
+
+    The following options are... optional:
+        use_snet=[True to use servicenet for connections]
         cache_timeout=[seconds for directory caching, default 600]
-        authurl=[authentication url - connect to non-Rackspace cluster]
+        authurl=[authentication url - connect to non-Rackspace (swift) cluster]
 
-    To run it, the syntax should be as simple as:
-        cloudfuse [mount point]
-
-    It also inherits a number of command-line arguments from the fuse
-    framework.  The "-h" argument should provide a summary.
+    It also inherits a number of command-line arguments and mount options from
+    the Fuse framework.  The "-h" argument should provide a summary.
 
     Your OS user will need access to the "fuse" group.  This can probably be
     accomplished with:
         sudo usermod -a -G fuse [username]
+
 
 BUGS/SHORTCOMINGS:
 
@@ -55,7 +67,8 @@ BUGS/SHORTCOMINGS:
     * Directory entries are created as empty files with the content-type
       "application/directory".
     * Cloud Files limits container and object listings to 10,000 items.
-      cloudfuse won't list more than this number of directories/files.
+      cloudfuse won't list more than that many files in a single directory.
+
 
 Thanks, and I hope you find it useful.
 
