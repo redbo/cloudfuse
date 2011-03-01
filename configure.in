@@ -2,10 +2,11 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ(2.61)
-AC_INIT(FULL-PACKAGE-NAME, VERSION, BUG-REPORT-ADDRESS)
+AC_INIT([cloudfuse], [0.9], [Michael Barton<mike@weirdlooking.com>])
 AC_LANG([C])
 AC_CONFIG_SRCDIR([cloudfuse.c])
 AC_CONFIG_HEADER([config.h])
+AC_CONFIG_FILES([Makefile])
 
 # Checks for programs.
 AC_PROG_CC
@@ -29,16 +30,15 @@ AC_TYPE_MODE_T
 AC_TYPE_OFF_T
 AC_TYPE_SIZE_T
 AC_STRUCT_TM
+AC_STRUCT_ST_BLOCKS
 
 # Checks for library functions.
 AC_FUNC_MALLOC
 AC_FUNC_MKTIME
 AC_TYPE_SIGNAL
 AC_FUNC_VPRINTF
-AC_STRUCT_ST_BLOCKS
 AC_CHECK_FUNCS([ftruncate memmove strcasecmp strchr strdup strncasecmp strrchr strstr])
 AC_CHECK_LIB(curl, CRYPTO_set_locking_callback, [AC_DEFINE(HAVE_CURL_OPENSSL, , [libcurl compiled with openssl])])
 AC_CHECK_LIB(curl, gcry_control, [AC_DEFINE(HAVE_CURL_GNUTLS, , [libcurl compiled with gnutls])])
 
-AC_CONFIG_FILES([Makefile])
 AC_OUTPUT
