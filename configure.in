@@ -36,6 +36,8 @@ AC_FUNC_MKTIME
 AC_TYPE_SIGNAL
 AC_FUNC_VPRINTF
 AC_CHECK_FUNCS([ftruncate memmove strcasecmp strchr strdup strncasecmp strrchr strstr])
+AC_CHECK_LIB(curl, CRYPTO_set_locking_callback, [AC_DEFINE(HAVE_CURL_OPENSSL, , [libcurl compiled with openssl])])
+AC_CHECK_LIB(curl, gcry_control, [AC_DEFINE(HAVE_CURL_GNUTLS, , [libcurl compiled with gnutls])])
 
 AC_CONFIG_FILES([Makefile])
 AC_OUTPUT

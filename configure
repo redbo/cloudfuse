@@ -2927,12 +2927,12 @@ if test -n "$PKG_CONFIG"; then
         pkg_cv_XML_CFLAGS="$XML_CFLAGS"
     else
         if test -n "$PKG_CONFIG" && \
-    { (echo "$as_me:$LINENO: \$PKG_CONFIG --exists --print-errors \"libxml-2.0 >= 2.0\"") >&5
-  ($PKG_CONFIG --exists --print-errors "libxml-2.0 >= 2.0") 2>&5
+    { (echo "$as_me:$LINENO: \$PKG_CONFIG --exists --print-errors \"libxml-2.0\"") >&5
+  ($PKG_CONFIG --exists --print-errors "libxml-2.0") 2>&5
   ac_status=$?
   echo "$as_me:$LINENO: \$? = $ac_status" >&5
   (exit $ac_status); }; then
-  pkg_cv_XML_CFLAGS=`$PKG_CONFIG --cflags "libxml-2.0 >= 2.0" 2>/dev/null`
+  pkg_cv_XML_CFLAGS=`$PKG_CONFIG --cflags "libxml-2.0" 2>/dev/null`
 else
   pkg_failed=yes
 fi
@@ -2945,12 +2945,12 @@ if test -n "$PKG_CONFIG"; then
         pkg_cv_XML_LIBS="$XML_LIBS"
     else
         if test -n "$PKG_CONFIG" && \
-    { (echo "$as_me:$LINENO: \$PKG_CONFIG --exists --print-errors \"libxml-2.0 >= 2.0\"") >&5
-  ($PKG_CONFIG --exists --print-errors "libxml-2.0 >= 2.0") 2>&5
+    { (echo "$as_me:$LINENO: \$PKG_CONFIG --exists --print-errors \"libxml-2.0\"") >&5
+  ($PKG_CONFIG --exists --print-errors "libxml-2.0") 2>&5
   ac_status=$?
   echo "$as_me:$LINENO: \$? = $ac_status" >&5
   (exit $ac_status); }; then
-  pkg_cv_XML_LIBS=`$PKG_CONFIG --libs "libxml-2.0 >= 2.0" 2>/dev/null`
+  pkg_cv_XML_LIBS=`$PKG_CONFIG --libs "libxml-2.0" 2>/dev/null`
 else
   pkg_failed=yes
 fi
@@ -2969,9 +2969,9 @@ else
         _pkg_short_errors_supported=no
 fi
         if test $_pkg_short_errors_supported = yes; then
-	        XML_PKG_ERRORS=`$PKG_CONFIG --short-errors --errors-to-stdout --print-errors "libxml-2.0 >= 2.0"`
+	        XML_PKG_ERRORS=`$PKG_CONFIG --short-errors --errors-to-stdout --print-errors "libxml-2.0"`
         else
-	        XML_PKG_ERRORS=`$PKG_CONFIG --errors-to-stdout --print-errors "libxml-2.0 >= 2.0"`
+	        XML_PKG_ERRORS=`$PKG_CONFIG --errors-to-stdout --print-errors "libxml-2.0"`
         fi
 	# Put the nasty error message in config.log where it belongs
 	echo "$XML_PKG_ERRORS" >&5
@@ -3002,12 +3002,12 @@ if test -n "$PKG_CONFIG"; then
         pkg_cv_CURL_CFLAGS="$CURL_CFLAGS"
     else
         if test -n "$PKG_CONFIG" && \
-    { (echo "$as_me:$LINENO: \$PKG_CONFIG --exists --print-errors \"libcurl >= 2.0\"") >&5
-  ($PKG_CONFIG --exists --print-errors "libcurl >= 2.0") 2>&5
+    { (echo "$as_me:$LINENO: \$PKG_CONFIG --exists --print-errors \"libcurl\"") >&5
+  ($PKG_CONFIG --exists --print-errors "libcurl") 2>&5
   ac_status=$?
   echo "$as_me:$LINENO: \$? = $ac_status" >&5
   (exit $ac_status); }; then
-  pkg_cv_CURL_CFLAGS=`$PKG_CONFIG --cflags "libcurl >= 2.0" 2>/dev/null`
+  pkg_cv_CURL_CFLAGS=`$PKG_CONFIG --cflags "libcurl" 2>/dev/null`
 else
   pkg_failed=yes
 fi
@@ -3020,12 +3020,12 @@ if test -n "$PKG_CONFIG"; then
         pkg_cv_CURL_LIBS="$CURL_LIBS"
     else
         if test -n "$PKG_CONFIG" && \
-    { (echo "$as_me:$LINENO: \$PKG_CONFIG --exists --print-errors \"libcurl >= 2.0\"") >&5
-  ($PKG_CONFIG --exists --print-errors "libcurl >= 2.0") 2>&5
+    { (echo "$as_me:$LINENO: \$PKG_CONFIG --exists --print-errors \"libcurl\"") >&5
+  ($PKG_CONFIG --exists --print-errors "libcurl") 2>&5
   ac_status=$?
   echo "$as_me:$LINENO: \$? = $ac_status" >&5
   (exit $ac_status); }; then
-  pkg_cv_CURL_LIBS=`$PKG_CONFIG --libs "libcurl >= 2.0" 2>/dev/null`
+  pkg_cv_CURL_LIBS=`$PKG_CONFIG --libs "libcurl" 2>/dev/null`
 else
   pkg_failed=yes
 fi
@@ -3044,9 +3044,9 @@ else
         _pkg_short_errors_supported=no
 fi
         if test $_pkg_short_errors_supported = yes; then
-	        CURL_PKG_ERRORS=`$PKG_CONFIG --short-errors --errors-to-stdout --print-errors "libcurl >= 2.0"`
+	        CURL_PKG_ERRORS=`$PKG_CONFIG --short-errors --errors-to-stdout --print-errors "libcurl"`
         else
-	        CURL_PKG_ERRORS=`$PKG_CONFIG --errors-to-stdout --print-errors "libcurl >= 2.0"`
+	        CURL_PKG_ERRORS=`$PKG_CONFIG --errors-to-stdout --print-errors "libcurl"`
         fi
 	# Put the nasty error message in config.log where it belongs
 	echo "$CURL_PKG_ERRORS" >&5
@@ -3077,12 +3077,12 @@ if test -n "$PKG_CONFIG"; then
         pkg_cv_FUSE_CFLAGS="$FUSE_CFLAGS"
     else
         if test -n "$PKG_CONFIG" && \
-    { (echo "$as_me:$LINENO: \$PKG_CONFIG --exists --print-errors \"fuse >= 2.0\"") >&5
-  ($PKG_CONFIG --exists --print-errors "fuse >= 2.0") 2>&5
+    { (echo "$as_me:$LINENO: \$PKG_CONFIG --exists --print-errors \"fuse\"") >&5
+  ($PKG_CONFIG --exists --print-errors "fuse") 2>&5
   ac_status=$?
   echo "$as_me:$LINENO: \$? = $ac_status" >&5
   (exit $ac_status); }; then
-  pkg_cv_FUSE_CFLAGS=`$PKG_CONFIG --cflags "fuse >= 2.0" 2>/dev/null`
+  pkg_cv_FUSE_CFLAGS=`$PKG_CONFIG --cflags "fuse" 2>/dev/null`
 else
   pkg_failed=yes
 fi
@@ -3095,12 +3095,12 @@ if test -n "$PKG_CONFIG"; then
         pkg_cv_FUSE_LIBS="$FUSE_LIBS"
     else
         if test -n "$PKG_CONFIG" && \
-    { (echo "$as_me:$LINENO: \$PKG_CONFIG --exists --print-errors \"fuse >= 2.0\"") >&5
-  ($PKG_CONFIG --exists --print-errors "fuse >= 2.0") 2>&5
+    { (echo "$as_me:$LINENO: \$PKG_CONFIG --exists --print-errors \"fuse\"") >&5
+  ($PKG_CONFIG --exists --print-errors "fuse") 2>&5
   ac_status=$?
   echo "$as_me:$LINENO: \$? = $ac_status" >&5
   (exit $ac_status); }; then
-  pkg_cv_FUSE_LIBS=`$PKG_CONFIG --libs "fuse >= 2.0" 2>/dev/null`
+  pkg_cv_FUSE_LIBS=`$PKG_CONFIG --libs "fuse" 2>/dev/null`
 else
   pkg_failed=yes
 fi
@@ -3119,9 +3119,9 @@ else
         _pkg_short_errors_supported=no
 fi
         if test $_pkg_short_errors_supported = yes; then
-	        FUSE_PKG_ERRORS=`$PKG_CONFIG --short-errors --errors-to-stdout --print-errors "fuse >= 2.0"`
+	        FUSE_PKG_ERRORS=`$PKG_CONFIG --short-errors --errors-to-stdout --print-errors "fuse"`
         else
-	        FUSE_PKG_ERRORS=`$PKG_CONFIG --errors-to-stdout --print-errors "fuse >= 2.0"`
+	        FUSE_PKG_ERRORS=`$PKG_CONFIG --errors-to-stdout --print-errors "fuse"`
         fi
 	# Put the nasty error message in config.log where it belongs
 	echo "$FUSE_PKG_ERRORS" >&5
@@ -6023,6 +6023,144 @@ _ACEOF
 
 fi
 done
+
+{ echo "$as_me:$LINENO: checking for CRYPTO_set_locking_callback in -lcurl" >&5
+echo $ECHO_N "checking for CRYPTO_set_locking_callback in -lcurl... $ECHO_C" >&6; }
+if test "${ac_cv_lib_curl_CRYPTO_set_locking_callback+set}" = set; then
+  echo $ECHO_N "(cached) $ECHO_C" >&6
+else
+  ac_check_lib_save_LIBS=$LIBS
+LIBS="-lcurl  $LIBS"
+cat >conftest.$ac_ext <<_ACEOF
+/* confdefs.h.  */
+_ACEOF
+cat confdefs.h >>conftest.$ac_ext
+cat >>conftest.$ac_ext <<_ACEOF
+/* end confdefs.h.  */
+
+/* Override any GCC internal prototype to avoid an error.
+   Use char because int might match the return type of a GCC
+   builtin and then its argument prototype would still apply.  */
+#ifdef __cplusplus
+extern "C"
+#endif
+char CRYPTO_set_locking_callback ();
+int
+main ()
+{
+return CRYPTO_set_locking_callback ();
+  ;
+  return 0;
+}
+_ACEOF
+rm -f conftest.$ac_objext conftest$ac_exeext
+if { (ac_try="$ac_link"
+case "(($ac_try" in
+  *\"* | *\`* | *\\*) ac_try_echo=\$ac_try;;
+  *) ac_try_echo=$ac_try;;
+esac
+eval "echo \"\$as_me:$LINENO: $ac_try_echo\"") >&5
+  (eval "$ac_link") 2>conftest.er1
+  ac_status=$?
+  grep -v '^ *+' conftest.er1 >conftest.err
+  rm -f conftest.er1
+  cat conftest.err >&5
+  echo "$as_me:$LINENO: \$? = $ac_status" >&5
+  (exit $ac_status); } && {
+	 test -z "$ac_c_werror_flag" ||
+	 test ! -s conftest.err
+       } && test -s conftest$ac_exeext &&
+       $as_test_x conftest$ac_exeext; then
+  ac_cv_lib_curl_CRYPTO_set_locking_callback=yes
+else
+  echo "$as_me: failed program was:" >&5
+sed 's/^/| /' conftest.$ac_ext >&5
+
+	ac_cv_lib_curl_CRYPTO_set_locking_callback=no
+fi
+
+rm -f core conftest.err conftest.$ac_objext conftest_ipa8_conftest.oo \
+      conftest$ac_exeext conftest.$ac_ext
+LIBS=$ac_check_lib_save_LIBS
+fi
+{ echo "$as_me:$LINENO: result: $ac_cv_lib_curl_CRYPTO_set_locking_callback" >&5
+echo "${ECHO_T}$ac_cv_lib_curl_CRYPTO_set_locking_callback" >&6; }
+if test $ac_cv_lib_curl_CRYPTO_set_locking_callback = yes; then
+
+cat >>confdefs.h <<\_ACEOF
+#define HAVE_CURL_OPENSSL
+_ACEOF
+
+fi
+
+{ echo "$as_me:$LINENO: checking for gcry_control in -lcurl" >&5
+echo $ECHO_N "checking for gcry_control in -lcurl... $ECHO_C" >&6; }
+if test "${ac_cv_lib_curl_gcry_control+set}" = set; then
+  echo $ECHO_N "(cached) $ECHO_C" >&6
+else
+  ac_check_lib_save_LIBS=$LIBS
+LIBS="-lcurl  $LIBS"
+cat >conftest.$ac_ext <<_ACEOF
+/* confdefs.h.  */
+_ACEOF
+cat confdefs.h >>conftest.$ac_ext
+cat >>conftest.$ac_ext <<_ACEOF
+/* end confdefs.h.  */
+
+/* Override any GCC internal prototype to avoid an error.
+   Use char because int might match the return type of a GCC
+   builtin and then its argument prototype would still apply.  */
+#ifdef __cplusplus
+extern "C"
+#endif
+char gcry_control ();
+int
+main ()
+{
+return gcry_control ();
+  ;
+  return 0;
+}
+_ACEOF
+rm -f conftest.$ac_objext conftest$ac_exeext
+if { (ac_try="$ac_link"
+case "(($ac_try" in
+  *\"* | *\`* | *\\*) ac_try_echo=\$ac_try;;
+  *) ac_try_echo=$ac_try;;
+esac
+eval "echo \"\$as_me:$LINENO: $ac_try_echo\"") >&5
+  (eval "$ac_link") 2>conftest.er1
+  ac_status=$?
+  grep -v '^ *+' conftest.er1 >conftest.err
+  rm -f conftest.er1
+  cat conftest.err >&5
+  echo "$as_me:$LINENO: \$? = $ac_status" >&5
+  (exit $ac_status); } && {
+	 test -z "$ac_c_werror_flag" ||
+	 test ! -s conftest.err
+       } && test -s conftest$ac_exeext &&
+       $as_test_x conftest$ac_exeext; then
+  ac_cv_lib_curl_gcry_control=yes
+else
+  echo "$as_me: failed program was:" >&5
+sed 's/^/| /' conftest.$ac_ext >&5
+
+	ac_cv_lib_curl_gcry_control=no
+fi
+
+rm -f core conftest.err conftest.$ac_objext conftest_ipa8_conftest.oo \
+      conftest$ac_exeext conftest.$ac_ext
+LIBS=$ac_check_lib_save_LIBS
+fi
+{ echo "$as_me:$LINENO: result: $ac_cv_lib_curl_gcry_control" >&5
+echo "${ECHO_T}$ac_cv_lib_curl_gcry_control" >&6; }
+if test $ac_cv_lib_curl_gcry_control = yes; then
+
+cat >>confdefs.h <<\_ACEOF
+#define HAVE_CURL_GNUTLS
+_ACEOF
+
+fi
 
 
 ac_config_files="$ac_config_files Makefile"

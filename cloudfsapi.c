@@ -21,6 +21,46 @@ static CURL *curl_pool[1024];
 static int curl_pool_count = 0;
 static int debug = 0;
 
+#ifdef HAVE_CURL_OPENSSL
+#include <openssl/crypto.h>
+static pthread_mutex_t *ssl_lockarray;
+static void lock_callback(int mode, int type, char *file, int line)
+{
+  if (mode & CRYPTO_LOCK)
+    pthread_mutex_lock(&(ssl_lockarray[type]));
+  else
+    pthread_mutex_unlock(&(ssl_lockarray[type]));
+}
+
+static unsigned long thread_id()
+{
+  return (unsigned long)pthread_self();
+}
+#endif
+
+#ifdef HAVE_CURL_GNUTLS
+#include <gcrypt.h>
+#include <errno.h>
+GCRY_THREAD_OPTION_PTHREAD_IMPL;
+#endif
+
+void init_locks()
+{
+  pthread_mutex_init(&pool_mut, NULL);
+  #ifdef HAVE_CURL_OPENSSL
+  int i;
+  ssl_lockarray = (pthread_mutex_t *)OPENSSL_malloc(CRYPTO_num_locks() *
+                                            sizeof(pthread_mutex_t));
+  for (i = 0; i < CRYPTO_num_locks(); i++)
+    pthread_mutex_init(&(ssl_lockarray[i]), NULL);
+  CRYPTO_set_id_callback((unsigned long (*)())thread_id);
+  CRYPTO_set_locking_callback((void (*)())lock_callback);
+  #endif
+  #ifdef HAVE_CURL_GNUTLS
+  gcry_control(GCRYCTL_SET_THREAD_CBS);
+  #endif
+}
+
 static void rewrite_url_snet(char *url)
 {
   char protocol[MAX_URL_SIZE];
@@ -334,8 +374,8 @@ int cloudfs_connect(char *username, char *password, char *authurl, int use_snet)
   if (!initialized)
   {
     LIBXML_TEST_VERSION
+    init_locks();
     curl_global_init(CURL_GLOBAL_ALL);
-    pthread_mutex_init(&pool_mut, NULL);
     strncpy(reconnect_args.username, username, sizeof(reconnect_args.username));
     strncpy(reconnect_args.password, password, sizeof(reconnect_args.password));
     strncpy(reconnect_args.authurl, authurl, sizeof(reconnect_args.authurl));
