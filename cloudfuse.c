@@ -1,4 +1,5 @@
 #define FUSE_USE_VERSION 26
+#define _GNU_SOURCE // fancy sscanf
 #include <fuse.h>
 #include <stdio.h>
 #include <stdlib.h>
