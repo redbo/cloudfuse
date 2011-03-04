@@ -16,7 +16,10 @@ OpenStack project.
 BUILDING:
 
     You'll need libcurl, fuse, libssl, and libxml2 (and probably their dev
-    packages) installed to build it.
+    packages) installed to build it.  From a base Debian or Ubuntu install,
+    this should get you to a point you can build and run it:
+        apt-get install build-essential libcurl4-openssl-dev libxml2-dev \
+             libssl-dev libfuse-dev
 
     Cloudfuse is built and installed like any other autoconf configured code.
     Normally,
