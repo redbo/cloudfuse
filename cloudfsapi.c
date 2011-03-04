@@ -21,7 +21,7 @@ static CURL *curl_pool[1024];
 static int curl_pool_count = 0;
 static int debug = 0;
 
-#ifdef HAVE_CURL_OPENSSL
+#ifdef HAVE_OPENSSL
 #include <openssl/crypto.h>
 static pthread_mutex_t *ssl_lockarray;
 static void lock_callback(int mode, int type, char *file, int line)
@@ -41,7 +41,7 @@ static unsigned long thread_id()
 void init_locks()
 {
   pthread_mutex_init(&pool_mut, NULL);
-  #ifdef HAVE_CURL_OPENSSL
+  #ifdef HAVE_OPENSSL
   int i;
   ssl_lockarray = (pthread_mutex_t *)OPENSSL_malloc(CRYPTO_num_locks() *
                                             sizeof(pthread_mutex_t));

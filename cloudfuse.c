@@ -466,8 +466,8 @@ int main(int argc, char **argv)
     return 1;
   }
 
-  #ifndef HAVE_CURL_OPENSSL
-  fprintf(stderr, "Compiled without libssl, forcing single-threaded.\n");
+  #ifndef HAVE_OPENSSL
+  #warning Compiling without libssl, will run single-threaded.
   fuse_opt_add_arg(&args, "-s");
   #endif
 
