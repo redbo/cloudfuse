@@ -1,5 +1,4 @@
 #define FUSE_USE_VERSION 26
-#define _GNU_SOURCE // fancy sscanf
 #include <fuse.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -18,6 +17,7 @@
 #include "cloudfsapi.h"
 #include "config.h"
 
+#define OPTION_SIZE 1024
 static int cache_timeout;
 
 typedef struct dir_cache
@@ -406,11 +406,11 @@ int main(int argc, char **argv)
   struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
 
   struct options {
-      char *username;
-      char *api_key;
-      char *cache_timeout;
-      char *authurl;
-      char *use_snet;
+      char username[OPTION_SIZE];
+      char api_key[OPTION_SIZE];
+      char cache_timeout[OPTION_SIZE];
+      char authurl[OPTION_SIZE];
+      char use_snet[OPTION_SIZE];
   } options = {
       .username = "",
       .api_key = "",
@@ -419,37 +419,27 @@ int main(int argc, char **argv)
       .use_snet = "false",
   };
 
-  struct fuse_opt cfs_opts[] =
+  int parse_option(void *data, const char *arg, int key, struct fuse_args *outargs)
   {
-    {"username=%s", offsetof(struct options, username), 0},
-    {"api_key=%s", offsetof(struct options, api_key), 0},
-    {"cache_timeout=%s", offsetof(struct options, cache_timeout), 0},
-    {"authurl=%s", offsetof(struct options, authurl), 0},
-    {"use_snet=%s", offsetof(struct options, use_snet), 0},
-    FUSE_OPT_END
-  };
-
-  int opt_proc(void *data, const char *arg, int key, struct fuse_args *outargs)
-  {
+    if (sscanf(arg, " username = %[^\r\n ]", options.username) ||
+        sscanf(arg, " api_key = %[^\r\n ]", options.api_key) ||
+        sscanf(arg, " cache_timeout = %[^\r\n ]", options.cache_timeout) ||
+        sscanf(arg, " authurl = %[^\r\n ]", options.authurl) ||
+        sscanf(arg, " use_snet = %[^\r\n ]", options.use_snet))
+      return 0;
     if (!strcmp(arg, "-f") || !strcmp(arg, "-d") || !strcmp(arg, "debug"))
       cloudfs_debug(1);
     return 1;
   }
 
-  fuse_opt_parse(&args, &options, cfs_opts, opt_proc);
+  fuse_opt_parse(&args, &options, NULL, parse_option);
 
   snprintf(settings_filename, sizeof(settings_filename), "%s/.cloudfuse", get_home_dir());
   if ((settings = fopen(settings_filename, "r")))
   {
-    char line[1024], option[1024], value[1024];
+    char line[OPTION_SIZE];
     while (fgets(line, sizeof(line), settings))
-    {
-      sscanf(line, " username = %a[^\r\n ]", &options.username);
-      sscanf(line, " api_key = %a[^\r\n ]", &options.api_key);
-      sscanf(line, " cache_timeout = %a[^\r\n ]", &options.cache_timeout);
-      sscanf(line, " authurl = %a[^\r\n ]", &options.authurl);
-      sscanf(line, " use_snet = %a[^\r\n ]", &options.use_snet);
-    }
+      parse_option(NULL, line, -1, &args);
     fclose(settings);
   }
 
@@ -475,6 +465,11 @@ int main(int argc, char **argv)
     fprintf(stderr, "Unable to authenticate.\n");
     return 1;
   }
+
+  #ifndef HAVE_CURL_OPENSSL
+  fprintf(stderr, "Compiled without libssl, forcing single-threaded.\n");
+  fuse_opt_add_arg(&args, "-s");
+  #endif
 
   struct fuse_operations cfs_oper = {
     .readdir = cfs_readdir,
