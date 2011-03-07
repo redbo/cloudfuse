@@ -398,6 +398,7 @@ int cloudfs_connect(char *username, char *password, char *authurl, int use_snet)
     return size * nmemb;
   }
 
+  pthread_mutex_lock(&pool_mut);
   storage_token[0] = storage_url[0] = '\0';
   curl_slist *headers = NULL;
   add_header(&headers, "X-Auth-User", username);
@@ -416,6 +417,7 @@ int cloudfs_connect(char *username, char *password, char *authurl, int use_snet)
   curl_easy_cleanup(curl);
   if (use_snet && storage_url[0])
     rewrite_url_snet(storage_url);
+  pthread_mutex_unlock(&pool_mut);
   return (response >= 200 && response < 300 && storage_token[0] && storage_url[0]);
 }
 
