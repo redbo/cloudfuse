@@ -170,11 +170,7 @@ static int send_request(char *method, const char *path, FILE *fp, xmlParserCtxtP
       curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
     }
     if (xmlctx)
-    {
-      xmlFreeDoc(xmlctx->myDoc);
-      xmlFreeParserCtxt(xmlctx);
-      xmlctx = xmlCreatePushParserCtxt(NULL, NULL, "", 0, NULL);
-    }
+      xmlClearParserCtxt(xmlctx);
     if (fp)
       rewind(fp);
     debugf("Attempting request again");
