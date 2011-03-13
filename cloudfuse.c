@@ -209,7 +209,6 @@ static int cfs_getattr(const char *path, struct stat *stbuf)
     stbuf->st_size = de->size;
     /* calc. blocks as if 4K blocksize filesystem; stat uses units of 512B */
     stbuf->st_blocks = ((4095 + de->size) / 4096) * 8;
-    debugf("size %ld blocks %ld", de->size, stbuf->st_blocks);
     stbuf->st_mode = S_IFREG | 0666;
     stbuf->st_nlink = 1;
   }
