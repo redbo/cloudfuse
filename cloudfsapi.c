@@ -14,6 +14,8 @@
 #include "cloudfsapi.h"
 #include "config.h"
 
+#define REQUEST_RETRIES 4
+
 static char storage_url[MAX_URL_SIZE];
 static char storage_token[MAX_HEADER_SIZE];
 static pthread_mutex_t pool_mut;
@@ -70,12 +72,12 @@ static size_t xml_dispatch(void *ptr, size_t size, size_t nmemb, void *stream)
 static CURL *get_connection(const char *path)
 {
   char url[MAX_URL_SIZE];
+  pthread_mutex_lock(&pool_mut);
   if (!storage_url[0])
   {
     debugf("get_connection with no storage_url?");
     abort();
   }
-  pthread_mutex_lock(&pool_mut);
   CURL *curl = curl_pool_count ? curl_pool[--curl_pool_count] : curl_easy_init();
   if (!curl)
   {
@@ -121,66 +123,57 @@ void add_header(curl_slist **headers, const char *name, const char *value)
 static int send_request(char *method, const char *path, FILE *fp, xmlParserCtxtPtr xmlctx)
 {
   long response = -1;
-  CURL *curl = get_connection(path);
-  curl_slist *headers = NULL;
-  add_header(&headers, "X-Auth-Token", storage_token);
+  int tries = 0;
 
-  if (!strcasecmp(method, "MKDIR"))
+  // retry on failures
+  for (tries = 0; tries < REQUEST_RETRIES; tries++)
   {
-    curl_easy_setopt(curl, CURLOPT_UPLOAD, 1);
-    curl_easy_setopt(curl, CURLOPT_INFILESIZE, 0);
-    add_header(&headers, "Content-Type", "application/directory");
-  }
-  else if (!strcasecmp(method, "PUT") && fp)
-  {
-    curl_easy_setopt(curl, CURLOPT_UPLOAD, 1);
-    curl_easy_setopt(curl, CURLOPT_INFILESIZE, file_size(fileno(fp)));
-    curl_easy_setopt(curl, CURLOPT_READDATA, fp);
-  }
-  else
-  {
-    curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, method);
-    if (xmlctx)
+    CURL *curl = get_connection(path);
+    curl_slist *headers = NULL;
+    add_header(&headers, "X-Auth-Token", storage_token);
+    if (!strcasecmp(method, "MKDIR"))
     {
-      curl_easy_setopt(curl, CURLOPT_WRITEDATA, xmlctx);
-      curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, &xml_dispatch);
+      curl_easy_setopt(curl, CURLOPT_UPLOAD, 1);
+      curl_easy_setopt(curl, CURLOPT_INFILESIZE, 0);
+      add_header(&headers, "Content-Type", "application/directory");
     }
-    else if (fp)
-      curl_easy_setopt(curl, CURLOPT_WRITEDATA, fp);
-  }
-  curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
-  curl_easy_perform(curl);
-  curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response);
-  if (response >= 500 || response == 401) // retry on failures
-  {
-    sleep(5);
-    if (response == 401) // re-authenticate on 401s
+    else if (!strcasecmp(method, "PUT") && fp)
     {
-      debugf("Re-authenticating");
-      curl_slist_free_all(headers);
-      headers = NULL;
-      if (!cloudfs_connect(0, 0, 0, 0))
-      {
-        return_connection(curl);
-        return response;
-      }
-      add_header(&headers, "X-Auth-Token", storage_token);
-      if (!strcasecmp(method, "MKDIR"))
-        add_header(&headers, "Content-Type", "application/directory");
-      curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
-    }
-    if (xmlctx)
-    {
-      xmlCtxtResetPush(xmlctx, NULL, 0, NULL, NULL);
-    }
-    if (fp)
       rewind(fp);
-    debugf("Attempting request again");
+      curl_easy_setopt(curl, CURLOPT_UPLOAD, 1);
+      curl_easy_setopt(curl, CURLOPT_INFILESIZE, file_size(fileno(fp)));
+      curl_easy_setopt(curl, CURLOPT_READDATA, fp);
+    }
+    else if (!strcasecmp(method, "GET"))
+    {
+      if (fp)
+      {
+        rewind(fp); // make sure the file is ready for a-writin'
+        fflush(fp);
+        ftruncate(fileno(fp), 0);
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, fp);
+      }
+      else if (xmlctx)
+      {
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, xmlctx);
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, &xml_dispatch);
+      }
+    }
+    else
+      curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, method);
+    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
     curl_easy_perform(curl);
     curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response);
+    curl_slist_free_all(headers);
+    return_connection(curl);
+    if (response >= 200 && response < 400)
+      return response;
+    sleep(8 << tries); // backoff
+    if (response == 401 && !cloudfs_connect(0, 0, 0, 0)) // re-authenticate on 401s
+      return response;
+    if (xmlctx)
+      xmlCtxtResetPush(xmlctx, NULL, 0, NULL, NULL);
   }
-  curl_slist_free_all(headers);
-  return_connection(curl);
   return response;
 }
 
@@ -397,6 +390,7 @@ int cloudfs_connect(char *username, char *password, char *authurl, int use_snet)
   }
 
   pthread_mutex_lock(&pool_mut);
+  debugf("Authenticating...");
   storage_token[0] = storage_url[0] = '\0';
   curl_slist *headers = NULL;
   add_header(&headers, "X-Auth-User", username);
