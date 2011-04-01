@@ -101,6 +101,7 @@ static CURL *get_connection(const char *path)
   curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 1);
   curl_easy_setopt(curl, CURLOPT_USERAGENT, USER_AGENT);
   curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0);
+  curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0);
   curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 10);
   return curl;
 }
@@ -403,6 +404,7 @@ int cloudfs_connect(char *username, char *password, char *authurl, int use_snet)
   curl_easy_setopt(curl, CURLOPT_USERAGENT, USER_AGENT);
   curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1);
   curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0);
+  curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0);
   curl_easy_setopt(curl, CURLOPT_TIMEOUT, 10);
   curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 10);
   curl_easy_perform(curl);
