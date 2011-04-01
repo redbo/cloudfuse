@@ -402,7 +402,9 @@ int cloudfs_connect(char *username, char *password, char *authurl, int use_snet)
   curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, &header_dispatch);
   curl_easy_setopt(curl, CURLOPT_USERAGENT, USER_AGENT);
   curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1);
+  curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0);
   curl_easy_setopt(curl, CURLOPT_TIMEOUT, 10);
+  curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 10);
   curl_easy_perform(curl);
   curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response);
   curl_slist_free_all(headers);
