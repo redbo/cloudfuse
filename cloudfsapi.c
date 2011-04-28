@@ -373,23 +373,7 @@ int cloudfs_connect(char *username, char *password, char *authurl, int use_snet)
     use_snet = reconnect_args.use_snet;
   }
 
-  size_t header_dispatch(void *ptr, size_t size, size_t nmemb, void *stream)
-  {
-    char *header = (char *)alloca(size * nmemb + 1);
-    char *head = (char *)alloca(size * nmemb + 1);
-    char *value = (char *)alloca(size * nmemb + 1);
-    memcpy(header, (char *)ptr, size * nmemb);
-    header[size * nmemb] = '\0';
-    if (sscanf(header, "%[^:]: %[^\r\n]", head, value) == 2)
-    {
-      if (!strncasecmp(head, "x-auth-token", size * nmemb))
-        strncpy(storage_token, value, sizeof(storage_token));
-      if (!strncasecmp(head, "x-storage-url", size * nmemb))
-        strncpy(storage_url, value, sizeof(storage_url));
-    }
-    return size * nmemb;
-  }
-
+  
   pthread_mutex_lock(&pool_mut);
   debugf("Authenticating...");
   storage_token[0] = storage_url[0] = '\0';
@@ -415,6 +399,23 @@ int cloudfs_connect(char *username, char *password, char *authurl, int use_snet)
     rewrite_url_snet(storage_url);
   pthread_mutex_unlock(&pool_mut);
   return (response >= 200 && response < 300 && storage_token[0] && storage_url[0]);
+}
+
+size_t header_dispatch(void *ptr, size_t size, size_t nmemb, void *stream)
+{
+  char *header = (char *)alloca(size * nmemb + 1);
+  char *head = (char *)alloca(size * nmemb + 1);
+  char *value = (char *)alloca(size * nmemb + 1);
+  memcpy(header, (char *)ptr, size * nmemb);
+  header[size * nmemb] = '\0';
+  if (sscanf(header, "%[^:]: %[^\r\n]", head, value) == 2)
+  {
+    if (!strncasecmp(head, "x-auth-token", size * nmemb))
+      strncpy(storage_token, value, sizeof(storage_token));
+    if (!strncasecmp(head, "x-storage-url", size * nmemb))
+      strncpy(storage_url, value, sizeof(storage_url));
+  }
+  return size * nmemb;
 }
 
 void debugf(char *fmt, ...)
