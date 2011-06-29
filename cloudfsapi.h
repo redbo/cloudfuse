@@ -28,6 +28,7 @@ int object_read_fp(const char *path, FILE *fp);
 int object_write_fp(const char *path, FILE *fp);
 int list_directory(const char *path, dir_entry **);
 int delete_object(const char *path);
+int copy_object(const char *src, const char *dst);
 int create_directory(const char *label);
 int cloudfs_connect(char *username, char *password, char *authurl, int snet_rewrite);
 void cloudfs_debug(int dbg);

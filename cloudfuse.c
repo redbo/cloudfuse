@@ -387,6 +387,20 @@ static int cfs_chmod(const char *path, mode_t mode)
   return 0;
 }
 
+static int cfs_rename(const char *src, const char *dst)
+{
+  dir_entry *src_de = path_info(src);
+  if (!src_de)
+      return -ENOENT;
+  if (copy_object(src, dst))
+  {
+    /* FIXME this isn't quite right as doesn't preserve last modified */
+    update_dir_cache(dst, src_de->size, 0);
+    return cfs_unlink(src);
+  }
+  return -EIO;
+}
+
 char *get_home_dir()
 {
   char *home;
@@ -489,6 +503,7 @@ int main(int argc, char **argv)
     .statfs = cfs_statfs,
     .chmod = cfs_chmod,
     .chown = cfs_chown,
+    .rename = cfs_rename,
   };
 
   pthread_mutex_init(&dmut, NULL);
