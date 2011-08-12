@@ -392,6 +392,8 @@ static int cfs_rename(const char *src, const char *dst)
   dir_entry *src_de = path_info(src);
   if (!src_de)
       return -ENOENT;
+  if (src_de->isdir)
+    return -EISDIR;
   if (copy_object(src, dst))
   {
     /* FIXME this isn't quite right as doesn't preserve last modified */

@@ -58,9 +58,7 @@ USE:
 
 BUGS/SHORTCOMINGS:
 
-    * Doesn't implement rename().  There's no good way to do this with the
-      Cloud Files API.  Unfortunately, this makes cloudfuse considerably less
-      useful in Finder, as it expects to be able to rename a lot.
+    * rename() doesn't work on directories (and probably never will).
     * When reading and writing files, it buffers them in a local temp file.
     * It keeps an in-memory cache of the directory structure, so it may not be
       usable for large file systems.  Also, files added by other applications
