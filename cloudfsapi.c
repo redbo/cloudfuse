@@ -121,7 +121,7 @@ void add_header(curl_slist **headers, const char *name, const char *value)
   *headers = curl_slist_append(*headers, x_header);
 }
 
-static int send_request(char *method, const char *path, FILE *fp, xmlParserCtxtPtr xmlctx)
+static int send_request(char *method, const char *path, FILE *fp, xmlParserCtxtPtr xmlctx, curl_slist *extra_headers)
 {
   long response = -1;
   int tries = 0;
@@ -132,6 +132,7 @@ static int send_request(char *method, const char *path, FILE *fp, xmlParserCtxtP
     CURL *curl = get_connection(path);
     curl_slist *headers = NULL;
     add_header(&headers, "X-Auth-Token", storage_token);
+    curl_easy_setopt(curl, CURLOPT_VERBOSE, debug);
     if (!strcasecmp(method, "MKDIR"))
     {
       curl_easy_setopt(curl, CURLOPT_UPLOAD, 1);
@@ -162,6 +163,13 @@ static int send_request(char *method, const char *path, FILE *fp, xmlParserCtxtP
     }
     else
       curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, method);
+    /* add the headers from extra_headers if any */
+    curl_slist *extra;
+    for (extra = extra_headers; extra; extra = extra->next)
+    {
+      debugf("adding header: %s", extra->data);
+      headers = curl_slist_append(headers, extra->data);
+    }
     curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
     curl_easy_perform(curl);
     curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response);
@@ -187,7 +195,7 @@ int object_read_fp(const char *path, FILE *fp)
   fflush(fp);
   rewind(fp);
   char *encoded = curl_escape(path, 0);
-  int response = send_request("PUT", encoded, fp, NULL);
+  int response = send_request("PUT", encoded, fp, NULL, NULL);
   curl_free(encoded);
   return (response >= 200 && response < 300);
 }
@@ -195,7 +203,7 @@ int object_read_fp(const char *path, FILE *fp)
 int object_write_fp(const char *path, FILE *fp)
 {
   char *encoded = curl_escape(path, 0);
-  int response = send_request("GET", encoded, fp, NULL);
+  int response = send_request("GET", encoded, fp, NULL, NULL);
   curl_free(encoded);
   fflush(fp);
   if ((response >= 200 && response < 300) || ftruncate(fileno(fp), 0))
@@ -211,12 +219,12 @@ int object_truncate(const char *path, off_t size)
   if (size == 0)
   {
     FILE *fp = fopen("/dev/null", "r");
-    response = send_request("PUT", encoded, fp, NULL);
+    response = send_request("PUT", encoded, fp, NULL, NULL);
     fclose(fp);
   }
   else
   {//TODO: this is busted
-    response = send_request("GET", encoded, NULL, NULL);
+    response = send_request("GET", encoded, NULL, NULL, NULL);
   }
   curl_free(encoded);
   return (response >= 200 && response < 300);
@@ -246,7 +254,7 @@ int list_directory(const char *path, dir_entry **dir_list)
     curl_free(encoded_container);
     curl_free(encoded_object);
   }
-  response = send_request("GET", container, NULL, xmlctx);
+  response = send_request("GET", container, NULL, xmlctx, NULL);
   xmlParseChunk(xmlctx, "", 0, 1);
   if (xmlctx->wellFormed && response >= 200 && response < 300)
   {
@@ -319,15 +327,27 @@ void free_dir_list(dir_entry *dir_list)
 int delete_object(const char *path)
 {
   char *encoded = curl_escape(path, 0);
-  int response = send_request("DELETE", encoded, NULL, NULL);
+  int response = send_request("DELETE", encoded, NULL, NULL, NULL);
   curl_free(encoded);
+  return (response >= 200 && response < 300);
+}
+
+int copy_object(const char *src, const char *dst)
+{
+  char *dst_encoded = curl_escape(dst, 0);
+  curl_slist *headers = NULL;
+  add_header(&headers, "X-Copy-From", src);
+  add_header(&headers, "Content-Length", "0");
+  int response = send_request("PUT", dst_encoded, NULL, NULL, headers);
+  curl_free(dst_encoded);
+  curl_slist_free_all(headers);
   return (response >= 200 && response < 300);
 }
 
 int create_directory(const char *path)
 {
   char *encoded = curl_escape(path, 0);
-  int response = send_request("MKDIR", encoded, NULL, NULL);
+  int response = send_request("MKDIR", encoded, NULL, NULL, NULL);
   curl_free(encoded);
   return (response >= 200 && response < 300);
 }
