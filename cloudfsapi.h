@@ -38,6 +38,8 @@ int object_truncate(const char *path, off_t size);
 void load_mimetypes(const char *filename);
 off_t file_size(int fd);
 
+size_t header_dispatch(void *ptr, size_t size, size_t nmemb, void *stream);
+
 void debugf(char *fmt, ...);
 #endif
 
