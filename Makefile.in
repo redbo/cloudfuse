@@ -9,7 +9,7 @@ INSTALL = @INSTALL@
 MKDIR_P = @MKDIR_P@
 prefix = @prefix@
 exec_prefix = @exec_prefix@
-bindir = $(exec_prefix)/bin
+bindir = $(DESTDIR)$(exec_prefix)/bin
 
 SOURCES=cloudfsapi.c cloudfuse.c
 HEADERS=cloudfsapi.h
