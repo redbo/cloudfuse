@@ -2,14 +2,14 @@
 .SUFFIXES: .c .o
 
 CC = @CC@
-CFLAGS = @CFLAGS@ @XML_CFLAGS@ @CURL_CFLAGS@ @FUSE_CFLAGS@
+CFLAGS = @CFLAGS@ @XML_CFLAGS@ @CURL_CFLAGS@ @FUSE_CFLAGS@ @OPENSSL_CFLAGS@
 LDFLAGS = @LDFLAGS@
-LIBS = @LIBS@ @XML_LIBS@ @CURL_LIBS@ @FUSE_LIBS@
+LIBS = @LIBS@ @XML_LIBS@ @CURL_LIBS@ @FUSE_LIBS@ @OPENSSL_LIBS@
 INSTALL = @INSTALL@
 MKDIR_P = @MKDIR_P@
 prefix = @prefix@
 exec_prefix = @exec_prefix@
-bindir = $(exec_prefix)/bin
+bindir = $(DESTDIR)$(exec_prefix)/bin
 
 SOURCES=cloudfsapi.c cloudfuse.c
 HEADERS=cloudfsapi.h

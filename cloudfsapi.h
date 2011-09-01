@@ -2,7 +2,6 @@
 #define _CLOUDFSAPI_H
 
 #include <curl/curl.h>
-#include <curl/types.h>
 #include <curl/easy.h>
 
 #define BUFFER_INITIAL_SIZE 4096
