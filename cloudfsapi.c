@@ -4,7 +4,9 @@
 #include <stdarg.h>
 #include <stdlib.h>
 #include <sys/stat.h>
+#ifdef __linux__
 #include <alloca.h>
+#endif
 #include <pthread.h>
 #include <time.h>
 #include <unistd.h>
