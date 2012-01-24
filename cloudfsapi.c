@@ -286,7 +286,7 @@ int list_directory(const char *path, dir_entry **dir_list)
               de->full_name = NULL;
           }
           if (!strcasecmp((const char *)anode->name, "bytes"))
-            de->size = atoi(content);
+            de->size = strtoll(content, NULL, 10);
           if (!strcasecmp((const char *)anode->name, "content_type"))
           {
             de->content_type = strdup(content);
