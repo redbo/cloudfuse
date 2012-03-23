@@ -17,6 +17,11 @@
 #include "cloudfsapi.h"
 #include "config.h"
 
+#ifdef HAVE_GIO
+#include <glib.h>
+#include <gio/gio.h>
+#endif
+
 
 #define OPTION_SIZE 1024
 
@@ -95,6 +100,11 @@ static void update_dir_cache(const char *path, off_t size, int isdir)
   dir_cache *cw;
   dir_entry *de;
   char dir[MAX_PATH_SIZE];
+#ifdef HAVE_GIO
+  gchar *guess_type;
+  gboolean guess_uncertain;
+#endif
+
   dir_for(path, dir);
   for (cw = dcache; cw; cw = cw->next)
   {
@@ -114,7 +124,21 @@ static void update_dir_cache(const char *path, off_t size, int isdir)
       de->isdir = isdir;
       de->name = strdup(&path[strlen(cw->path)+1]);
       de->full_name = strdup(path);
-      de->content_type = strdup(isdir ? "application/directory" : "application/octet-stream");
+      if (isdir) {
+        de->content_type = strdup("application/directory");
+      } else {
+#ifdef HAVE_GIO
+        guess_type = g_content_type_guess(de->name, NULL, 0, &guess_uncertain);
+        if (! guess_uncertain) {
+          de->content_type = strdup(guess_type);
+        } else {
+#endif
+          de->content_type = "application/octet-stream";
+        }
+#ifdef HAVE_GIO
+        g_free(guess_type);
+      }
+#endif
       de->last_modified = time(NULL);
       de->next = cw->entries;
       cw->entries = de;
@@ -462,6 +486,9 @@ int main(int argc, char **argv)
   }
 
   cache_timeout = atoi(options.cache_timeout);
+#ifdef HAVE_GIO
+  g_type_init();
+#endif
 
   if (!*options.username || !*options.api_key)
   {
@@ -516,3 +543,15 @@ int main(int argc, char **argv)
   return fuse_main(args.argc, args.argv, &cfs_oper, &options);
 }
 
+/*
+ * Editor modelines
+ *
+ * Local Variables:
+ * c-basic-offset: 2
+ * tab-width: 8
+ * indent-tabs-mode: nil
+ * End:
+ *
+ * ex: set shiftwidth=2 tabstop=8 expandtab:
+ * :indentSize=2:tabSize=8:noTabs=true:
+ */
