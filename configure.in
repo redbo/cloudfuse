@@ -18,6 +18,7 @@ PKG_CHECK_MODULES(XML, libxml-2.0, , AC_MSG_ERROR('Unable to find libxml2. Pleas
 PKG_CHECK_MODULES(CURL, libcurl, , AC_MSG_ERROR('Unable to find libcurl.  Please make sure library and header files are installed.'))
 PKG_CHECK_MODULES(FUSE, fuse, , AC_MSG_ERROR('Unable to find libfuse.  Please make sure library and header files are installed.'))
 PKG_CHECK_MODULES(OPENSSL, openssl, , [])
+PKG_CHECK_MODULES(GIO, gio-2.0, AC_DEFINE([HAVE_GIO], [], [GIO package was found]), AC_MSG_WARN('Unable to find GIO.  MIME type support disabled.'))
 
 # Checks for header files.
 AC_FUNC_ALLOCA

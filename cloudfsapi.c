@@ -16,6 +16,11 @@
 #include "cloudfsapi.h"
 #include "config.h"
 
+#ifdef HAVE_GIO
+#include <glib.h>
+#include <gio/gio.h>
+#endif
+
 #define REQUEST_RETRIES 4
 
 static char storage_url[MAX_URL_SIZE];
@@ -143,10 +148,21 @@ static int send_request(char *method, const char *path, FILE *fp, xmlParserCtxtP
     }
     else if (!strcasecmp(method, "PUT") && fp)
     {
+#ifdef HAVE_GIO
+      gchar *guess_type;
+      gboolean guess_uncertain;
+#endif
       rewind(fp);
       curl_easy_setopt(curl, CURLOPT_UPLOAD, 1);
       curl_easy_setopt(curl, CURLOPT_INFILESIZE, file_size(fileno(fp)));
       curl_easy_setopt(curl, CURLOPT_READDATA, fp);
+#ifdef HAVE_GIO
+      guess_type = g_content_type_guess(path, NULL, 0, &guess_uncertain);
+      if (! guess_uncertain) {
+        add_header(&headers, "Content-Type", guess_type);
+      }
+      g_free(guess_type);
+#endif
     }
     else if (!strcasecmp(method, "GET"))
     {
@@ -338,8 +354,20 @@ int copy_object(const char *src, const char *dst)
 {
   char *dst_encoded = curl_escape(dst, 0);
   curl_slist *headers = NULL;
+#ifdef HAVE_GIO
+  gchar *guess_type;
+  gboolean guess_uncertain;
+#endif
+
   add_header(&headers, "X-Copy-From", src);
   add_header(&headers, "Content-Length", "0");
+#ifdef HAVE_GIO
+  guess_type = g_content_type_guess(dst, NULL, 0, &guess_uncertain);
+  if (! guess_uncertain) {
+    add_header(&headers, "Content-Type", guess_type);
+  }
+  g_free(guess_type);
+#endif
   int response = send_request("PUT", dst_encoded, NULL, NULL, headers);
   curl_free(dst_encoded);
   curl_slist_free_all(headers);
@@ -453,3 +481,15 @@ void debugf(char *fmt, ...)
   }
 }
 
+/*
+ * Editor modelines
+ *
+ * Local Variables:
+ * c-basic-offset: 2
+ * tab-width: 8
+ * indent-tabs-mode: nil
+ * End:
+ *
+ * ex: set shiftwidth=2 tabstop=8 expandtab:
+ * :indentSize=2:tabSize=8:noTabs=true:
+ */

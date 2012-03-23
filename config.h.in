@@ -52,6 +52,9 @@
 /* Openssl headers were found */
 #undef HAVE_OPENSSL
 
+/* GIO headers were found */
+#undef HAVE_GIO
+
 /* Define to 1 if you have the <pthread.h> header file. */
 #undef HAVE_PTHREAD_H
 
