@@ -21,6 +21,10 @@ BUILDING:
         apt-get install build-essential libcurl4-openssl-dev libxml2-dev \
              libssl-dev libfuse-dev
 
+    For MIME (Content-type header) support you need GIO. On Debian and
+    Ubuntu it comes with GLib:
+        apt-get install libglib2.0-dev
+
     Cloudfuse is built and installed like any other autoconf configured code.
     Normally,
         ./configure
