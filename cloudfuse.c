@@ -129,11 +129,11 @@ static void update_dir_cache(const char *path, off_t size, int isdir)
       } else {
 #ifdef HAVE_GIO
         guess_type = g_content_type_guess(de->name, NULL, 0, &guess_uncertain);
-        if (! guess_uncertain) {
+        if (! guess_uncertain && guess_type) {
           de->content_type = strdup(guess_type);
         } else {
 #endif
-          de->content_type = "application/octet-stream";
+          de->content_type = strdup("application/octet-stream");
         }
 #ifdef HAVE_GIO
         g_free(guess_type);
@@ -473,7 +473,7 @@ int main(int argc, char **argv)
   char settings_filename[MAX_PATH_SIZE] = "";
   FILE *settings;
   struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
- 
+
   fuse_opt_parse(&args, &options, NULL, parse_option);
 
   snprintf(settings_filename, sizeof(settings_filename), "%s/.cloudfuse", get_home_dir());

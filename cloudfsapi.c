@@ -149,8 +149,8 @@ static int send_request(char *method, const char *path, FILE *fp, xmlParserCtxtP
     else if (!strcasecmp(method, "PUT") && fp)
     {
 #ifdef HAVE_GIO
-      gchar *guess_type;
-      gboolean guess_uncertain;
+      gchar *guess_type = NULL;
+      gboolean guess_uncertain = TRUE;
 #endif
       rewind(fp);
       curl_easy_setopt(curl, CURLOPT_UPLOAD, 1);
@@ -158,7 +158,7 @@ static int send_request(char *method, const char *path, FILE *fp, xmlParserCtxtP
       curl_easy_setopt(curl, CURLOPT_READDATA, fp);
 #ifdef HAVE_GIO
       guess_type = g_content_type_guess(path, NULL, 0, &guess_uncertain);
-      if (! guess_uncertain) {
+      if (! guess_uncertain && guess_type) {
         add_header(&headers, "Content-Type", guess_type);
       }
       g_free(guess_type);
@@ -355,18 +355,20 @@ int copy_object(const char *src, const char *dst)
   char *dst_encoded = curl_escape(dst, 0);
   curl_slist *headers = NULL;
 #ifdef HAVE_GIO
-  gchar *guess_type;
-  gboolean guess_uncertain;
+  gchar *guess_type = NULL;
+  gboolean guess_uncertain = TRUE;
 #endif
 
   add_header(&headers, "X-Copy-From", src);
   add_header(&headers, "Content-Length", "0");
 #ifdef HAVE_GIO
-  guess_type = g_content_type_guess(dst, NULL, 0, &guess_uncertain);
-  if (! guess_uncertain) {
-    add_header(&headers, "Content-Type", guess_type);
+  if (dst) {
+    guess_type = g_content_type_guess(dst, NULL, 0, &guess_uncertain);
+    if (! guess_uncertain && guess_type) {
+      add_header(&headers, "Content-Type", guess_type);
+    }
+    g_free(guess_type);
   }
-  g_free(guess_type);
 #endif
   int response = send_request("PUT", dst_encoded, NULL, NULL, headers);
   curl_free(dst_encoded);
@@ -423,7 +425,7 @@ int cloudfs_connect(char *username, char *password, char *authurl, int use_snet)
     use_snet = reconnect_args.use_snet;
   }
 
-  
+
   pthread_mutex_lock(&pool_mut);
   debugf("Authenticating...");
   storage_token[0] = storage_url[0] = '\0';
