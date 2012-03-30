@@ -47,6 +47,8 @@ USE:
         use_snet=[True to use servicenet for connections]
         cache_timeout=[seconds for directory caching, default 600]
         authurl=[authentication url - connect to non-Rackspace (swift) cluster]
+        use_openstack=[True if using OpenStack Keystone]
+        tenant=[Tenant for authentication with Keystone]
 
     It also inherits a number of command-line arguments and mount options from
     the Fuse framework.  The "-h" argument should provide a summary.
@@ -54,6 +56,17 @@ USE:
     Your OS user will need access to the "fuse" group.  This can probably be
     accomplished with:
         sudo usermod -a -G fuse [username]
+
+
+EXAMPLE:
+
+    A typical .cloudfuse configuration file for use with OpenStack Essex:
+
+    username=demo
+    tenant=demo
+    api_key=supersecret
+    authurl=http://10.10.0.1:5000/v2.0/tokens
+    use_openstack=true
 
 
 BUGS/SHORTCOMINGS:

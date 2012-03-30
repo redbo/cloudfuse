@@ -419,25 +419,31 @@ char *get_home_dir()
 
 static struct options {
     char username[OPTION_SIZE];
+    char tenant[OPTION_SIZE];
     char api_key[OPTION_SIZE];
     char cache_timeout[OPTION_SIZE];
     char authurl[OPTION_SIZE];
     char use_snet[OPTION_SIZE];
+    char use_openstack[OPTION_SIZE];
 } options = {
     .username = "",
     .api_key = "",
+    .tenant = "",
     .cache_timeout = "600",
     .authurl = "https://auth.api.rackspacecloud.com/v1.0",
     .use_snet = "false",
+    .use_openstack = "false",
 };
 
 int parse_option(void *data, const char *arg, int key, struct fuse_args *outargs)
 {
   if (sscanf(arg, " username = %[^\r\n ]", options.username) ||
+      sscanf(arg, " tenant = %[^\r\n ]", options.tenant) ||
       sscanf(arg, " api_key = %[^\r\n ]", options.api_key) ||
       sscanf(arg, " cache_timeout = %[^\r\n ]", options.cache_timeout) ||
       sscanf(arg, " authurl = %[^\r\n ]", options.authurl) ||
-      sscanf(arg, " use_snet = %[^\r\n ]", options.use_snet))
+      sscanf(arg, " use_snet = %[^\r\n ]", options.use_snet) ||
+      sscanf(arg, " use_openstack = %[^\r\n ]", options.use_openstack))
     return 0;
   if (!strcmp(arg, "-f") || !strcmp(arg, "-d") || !strcmp(arg, "debug"))
     cloudfs_debug(1);
@@ -469,16 +475,19 @@ int main(int argc, char **argv)
     fprintf(stderr, "These can be set either as mount options or in"
                     " a file named %s\n\n", settings_filename);
     fprintf(stderr, "  username=[Mosso username]\n");
+    fprintf(stderr, "  tenant=[Tenant for use with OpenStack]\n");
     fprintf(stderr, "  api_key=[Mosso api key]\n\n");
     fprintf(stderr, "These entries are optional:\n\n");
     fprintf(stderr, "  cache_timeout=[seconds for directory caching]\n");
     fprintf(stderr, "  use_snet=[True to connect to snet]\n");
+    fprintf(stderr, "  use_openstack=[True to connect to OpenStack]\n");
     fprintf(stderr, "  authurl=[used for testing]\n");
     return 1;
   }
 
-  if (!cloudfs_connect(options.username, options.api_key, options.authurl,
-        !strcasecmp(options.use_snet, "true")))
+  if (!cloudfs_connect(options.username, options.tenant, options.api_key, options.authurl,
+        !strcasecmp(options.use_snet, "true"),
+        !strcasecmp(options.use_openstack, "true")))
   {
     fprintf(stderr, "Unable to authenticate.\n");
     return 1;
