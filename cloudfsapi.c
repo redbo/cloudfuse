@@ -521,7 +521,20 @@ int cloudfs_connect(char *username, char *tenant, char *password, char *authurl,
                 {
                   xmlChar * publicURL = xmlGetProp(endpoint_node, "publicURL");
                   if (publicURL) {
-                    strncpy(storage_url, publicURL, sizeof(storage_url));
+                    char copy = 1;
+                    if (storage_url[0]) {
+                      if (strstr(publicURL, "cdn")) {
+                        copy = 0;
+                        debugf("Warning - found multiple object-store services; keeping %s, ignoring %s",
+                                                     storage_url, publicURL);
+                      } else {
+                        debugf("Warning - found multiple object-store services; using %s instead of %s",
+                                                     publicURL, storage_url);
+                      }
+                    }
+                    if (copy) {
+                      strncpy(storage_url, publicURL, sizeof(storage_url));
+                    }
                   }
                   xmlFree(publicURL);
                 }
@@ -533,6 +546,9 @@ int cloudfs_connect(char *username, char *tenant, char *password, char *authurl,
               {
                 xmlChar * tokenId = xmlGetProp(top_node, "id");
                 if (tokenId) {
+                  if (storage_token[0]) {
+                    debugf("Warning - found multiple authentication tokens.");
+                  }
                   strncpy(storage_token, tokenId, sizeof(storage_token));
                 }
                 xmlFree(tokenId);
