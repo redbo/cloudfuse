@@ -68,6 +68,7 @@ static void rewrite_url_snet(char *url)
 
 static size_t xml_dispatch(void *ptr, size_t size, size_t nmemb, void *stream)
 {
+  debugf("xml data: %s", ptr);
   xmlParseChunk((xmlParserCtxtPtr)stream, (char *)ptr, size * nmemb, 0);
   return size * nmemb;
 }
@@ -237,8 +238,11 @@ int list_directory(const char *path, dir_entry **dir_list)
 {
   char container[MAX_PATH_SIZE * 3] = "";
   char object[MAX_PATH_SIZE] = "";
+  int prefix_length = 0;
   int response = 0;
   int retval = 0;
+  int entry_count = 0;
+
   *dir_list = NULL;
   xmlNode *onode = NULL, *anode = NULL, *text_node = NULL;
   xmlParserCtxtPtr xmlctx = xmlCreatePushParserCtxt(NULL, NULL, "", 0, NULL);
@@ -252,8 +256,19 @@ int list_directory(const char *path, dir_entry **dir_list)
     sscanf(path, "/%[^/]/%[^\n]", container, object);
     char *encoded_container = curl_escape(container, 0);
     char *encoded_object = curl_escape(object, 0);
-    snprintf(container, sizeof(container), "%s?format=xml&path=%s",
-              encoded_container, encoded_object);
+
+    // The empty path doesn't get a trailing slash, everything else does
+    char *trailing_slash;
+    prefix_length = strlen(object);
+    if (object[0] == 0) {
+      trailing_slash = "";
+    } else {
+      trailing_slash = "/";
+      prefix_length++;
+    }
+
+    snprintf(container, sizeof(container), "%s?format=xml&delimiter=/&prefix=%s%s",
+              encoded_container, encoded_object, trailing_slash);
     curl_free(encoded_container);
     curl_free(encoded_object);
   }
@@ -263,14 +278,23 @@ int list_directory(const char *path, dir_entry **dir_list)
   {
     xmlNode *root_element = xmlDocGetRootElement(xmlctx->myDoc);
     for (onode = root_element->children; onode; onode = onode->next)
-      if ((onode->type == XML_ELEMENT_NODE) &&
-         (!strcasecmp((const char *)onode->name, "object") || !strcasecmp((const char *)onode->name, "container")))
+    {
+      if (onode->type != XML_ELEMENT_NODE) continue;
+
+      char is_object = !strcasecmp((const char *)onode->name, "object");
+      char is_container = !strcasecmp((const char *)onode->name, "container");
+      char is_subdir = !strcasecmp((const char *)onode->name, "subdir");
+
+      if (is_object || is_container || is_subdir)
       {
+        entry_count++;
+
         dir_entry *de = (dir_entry *)malloc(sizeof(dir_entry));
         de->size = 0;
         de->last_modified = time(NULL);
-        if (!strcasecmp((const char *)onode->name, "container"))
+        if (is_container || is_subdir) {
           de->content_type = strdup("application/directory");
+        }
         for (anode = onode->children; anode; anode = anode->next)
         {
           char *content = "<?!?>";
@@ -279,10 +303,14 @@ int list_directory(const char *path, dir_entry **dir_list)
               content = (char *)text_node->content;
           if (!strcasecmp((const char *)anode->name, "name"))
           {
-            if (strrchr(content, '/'))
-              de->name = strdup(strrchr(content, '/')+1);
-            else
-              de->name = strdup(content);
+            de->name = strdup(content + prefix_length);
+
+            // Remove trailing slash
+            char * slash = strrchr(de->name, '/');
+            if (slash && (0 == *(slash + 1))) {
+              *slash = 0;
+            }
+
             if (asprintf(&(de->full_name), "%s/%s", path, de->name) < 0)
               de->full_name = NULL;
           }
@@ -307,9 +335,15 @@ int list_directory(const char *path, dir_entry **dir_list)
              (strstr(de->content_type, "application/directory") != NULL));
         de->next = *dir_list;
         *dir_list = de;
+      } else {
+        debugf("unknown element: %s", onode->name);
       }
+    }
     retval = 1;
   }
+
+  debugf("entry count: %d", entry_count);
+
   xmlFreeDoc(xmlctx->myDoc);
   xmlFreeParserCtxt(xmlctx);
   return retval;
