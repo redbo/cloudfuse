@@ -321,6 +321,7 @@ void free_dir_list(dir_entry *dir_list)
     dir_entry *de = dir_list;
     dir_list = dir_list->next;
     free(de->name);
+    free(de->full_name);
     free(de->content_type);
     free(de);
   }
