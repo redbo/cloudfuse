@@ -4,7 +4,9 @@
 #include <stdarg.h>
 #include <stdlib.h>
 #include <sys/stat.h>
+#ifdef __linux__
 #include <alloca.h>
+#endif
 #include <pthread.h>
 #include <time.h>
 #include <unistd.h>
@@ -258,7 +260,7 @@ int list_directory_internal(const char *path, dir_entry **dir_list)
   }
   if (*dir_list != NULL) {
     strcat(container, "&marker=");
-    strcat(container, (*dir_list)->name);
+    strcat(container, (*dir_list)->marker);
   }
   printf("%s\n", container);
   response = send_request("GET", container, NULL, xmlctx, NULL);
@@ -288,6 +290,7 @@ int list_directory_internal(const char *path, dir_entry **dir_list)
               de->name = strdup(strrchr(content, '/')+1);
             else
               de->name = strdup(content);
+            de->marker = strdup(content);
             if (asprintf(&(de->full_name), "%s/%s", path, de->name) < 0)
               de->full_name = NULL;
           }
