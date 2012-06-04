@@ -269,6 +269,7 @@ static int cfs_create(const char *path, mode_t mode, struct fuse_file_info *info
 static int cfs_open(const char *path, struct fuse_file_info *info)
 {
   FILE *temp_file = tmpfile();
+  dir_entry *de = path_info(path);
   if (!(info->flags & O_WRONLY))
   {
     if (!object_write_fp(path, temp_file))
@@ -276,7 +277,7 @@ static int cfs_open(const char *path, struct fuse_file_info *info)
       fclose(temp_file);
       return -ENOENT;
     }
-    update_dir_cache(path, 0, 0);
+    update_dir_cache(path, (de ? de->size : 0), 0);
   }
   openfile *of = (openfile *)malloc(sizeof(openfile));
   of->fd = dup(fileno(temp_file));
