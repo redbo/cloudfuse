@@ -1,0 +1,12 @@
+# Created by configure
+Makefile
+config.h
+config.log
+config.status
+
+# Binary outputs
+cloudfuse
+
+# Ignore Eclipse files
+.cproject
+.project
