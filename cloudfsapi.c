@@ -20,6 +20,7 @@
 
 static char storage_url[MAX_URL_SIZE];
 static char storage_token[MAX_HEADER_SIZE];
+static int storage_use_openstack = 0;
 static pthread_mutex_t pool_mut;
 static CURL *curl_pool[1024];
 static int curl_pool_count = 0;
@@ -67,6 +68,7 @@ static void rewrite_url_snet(char *url)
 
 static size_t xml_dispatch(void *ptr, size_t size, size_t nmemb, void *stream)
 {
+  debugf("xml data: %s", ptr);
   xmlParseChunk((xmlParserCtxtPtr)stream, (char *)ptr, size * nmemb, 0);
   return size * nmemb;
 }
@@ -180,7 +182,7 @@ static int send_request(char *method, const char *path, FILE *fp, xmlParserCtxtP
     if (response >= 200 && response < 400)
       return response;
     sleep(8 << tries); // backoff
-    if (response == 401 && !cloudfs_connect(0, 0, 0, 0)) // re-authenticate on 401s
+    if (response == 401 && !cloudfs_connect(0, 0, 0, 0, 0, 0)) // re-authenticate on 401s
       return response;
     if (xmlctx)
       xmlCtxtResetPush(xmlctx, NULL, 0, NULL, NULL);
@@ -236,8 +238,11 @@ int list_directory(const char *path, dir_entry **dir_list)
 {
   char container[MAX_PATH_SIZE * 3] = "";
   char object[MAX_PATH_SIZE] = "";
+  int prefix_length = 0;
   int response = 0;
   int retval = 0;
+  int entry_count = 0;
+
   *dir_list = NULL;
   xmlNode *onode = NULL, *anode = NULL, *text_node = NULL;
   xmlParserCtxtPtr xmlctx = xmlCreatePushParserCtxt(NULL, NULL, "", 0, NULL);
@@ -251,8 +256,19 @@ int list_directory(const char *path, dir_entry **dir_list)
     sscanf(path, "/%[^/]/%[^\n]", container, object);
     char *encoded_container = curl_escape(container, 0);
     char *encoded_object = curl_escape(object, 0);
-    snprintf(container, sizeof(container), "%s?format=xml&path=%s",
-              encoded_container, encoded_object);
+
+    // The empty path doesn't get a trailing slash, everything else does
+    char *trailing_slash;
+    prefix_length = strlen(object);
+    if (object[0] == 0) {
+      trailing_slash = "";
+    } else {
+      trailing_slash = "/";
+      prefix_length++;
+    }
+
+    snprintf(container, sizeof(container), "%s?format=xml&delimiter=/&prefix=%s%s",
+              encoded_container, encoded_object, trailing_slash);
     curl_free(encoded_container);
     curl_free(encoded_object);
   }
@@ -262,14 +278,23 @@ int list_directory(const char *path, dir_entry **dir_list)
   {
     xmlNode *root_element = xmlDocGetRootElement(xmlctx->myDoc);
     for (onode = root_element->children; onode; onode = onode->next)
-      if ((onode->type == XML_ELEMENT_NODE) &&
-         (!strcasecmp((const char *)onode->name, "object") || !strcasecmp((const char *)onode->name, "container")))
+    {
+      if (onode->type != XML_ELEMENT_NODE) continue;
+
+      char is_object = !strcasecmp((const char *)onode->name, "object");
+      char is_container = !strcasecmp((const char *)onode->name, "container");
+      char is_subdir = !strcasecmp((const char *)onode->name, "subdir");
+
+      if (is_object || is_container || is_subdir)
       {
+        entry_count++;
+
         dir_entry *de = (dir_entry *)malloc(sizeof(dir_entry));
         de->size = 0;
         de->last_modified = time(NULL);
-        if (!strcasecmp((const char *)onode->name, "container"))
+        if (is_container || is_subdir) {
           de->content_type = strdup("application/directory");
+        }
         for (anode = onode->children; anode; anode = anode->next)
         {
           char *content = "<?!?>";
@@ -278,10 +303,14 @@ int list_directory(const char *path, dir_entry **dir_list)
               content = (char *)text_node->content;
           if (!strcasecmp((const char *)anode->name, "name"))
           {
-            if (strrchr(content, '/'))
-              de->name = strdup(strrchr(content, '/')+1);
-            else
-              de->name = strdup(content);
+            de->name = strdup(content + prefix_length);
+
+            // Remove trailing slash
+            char * slash = strrchr(de->name, '/');
+            if (slash && (0 == *(slash + 1))) {
+              *slash = 0;
+            }
+
             if (asprintf(&(de->full_name), "%s/%s", path, de->name) < 0)
               de->full_name = NULL;
           }
@@ -306,9 +335,15 @@ int list_directory(const char *path, dir_entry **dir_list)
              (strstr(de->content_type, "application/directory") != NULL));
         de->next = *dir_list;
         *dir_list = de;
+      } else {
+        debugf("unknown element: %s", onode->name);
       }
+    }
     retval = 1;
   }
+
+  debugf("entry count: %d", entry_count);
+
   xmlFreeDoc(xmlctx->myDoc);
   xmlFreeParserCtxt(xmlctx);
   return retval;
@@ -367,15 +402,19 @@ off_t file_size(int fd)
   return buf.st_size;
 }
 
-int cloudfs_connect(char *username, char *password, char *authurl, int use_snet)
+int cloudfs_connect(char *username, char *tenant, char *password, char *authurl, int use_snet, int use_openstack)
 {
   static struct {
     char username[MAX_HEADER_SIZE], password[MAX_HEADER_SIZE],
-         authurl[MAX_URL_SIZE], use_snet;
+         tenant[MAX_HEADER_SIZE],
+         authurl[MAX_URL_SIZE], use_snet, use_openstack;
   } reconnect_args;
 
   long response = -1;
   static int initialized = 0;
+
+  xmlNode *top_node = NULL, *service_node = NULL, *endpoint_node = NULL;
+  xmlParserCtxtPtr xmlctx = NULL;
 
   if (!initialized)
   {
@@ -383,27 +422,58 @@ int cloudfs_connect(char *username, char *password, char *authurl, int use_snet)
     init_locks();
     curl_global_init(CURL_GLOBAL_ALL);
     strncpy(reconnect_args.username, username, sizeof(reconnect_args.username));
+    strncpy(reconnect_args.tenant, tenant, sizeof(reconnect_args.tenant));
     strncpy(reconnect_args.password, password, sizeof(reconnect_args.password));
     strncpy(reconnect_args.authurl, authurl, sizeof(reconnect_args.authurl));
     reconnect_args.use_snet = use_snet;
+    reconnect_args.use_openstack = use_openstack;
     initialized = 1;
   }
   else
   {
     username = reconnect_args.username;
+    tenant = reconnect_args.tenant;
     password = reconnect_args.password;
     authurl = reconnect_args.authurl;
     use_snet = reconnect_args.use_snet;
+    use_openstack = reconnect_args.use_openstack;
+  }
+
+  char postdata[2048];
+  if (use_openstack) {
+      int count = snprintf(postdata, sizeof(postdata),
+                           "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
+                           "<auth xmlns=\"http://docs.openstack.org/identity/api/v2.0\" tenantName=\"%s\">"
+                           "<passwordCredentials username=\"%s\" password=\"%s\"/>"
+                           "</auth>",
+                           tenant, username, password);
+      if (count >= sizeof(postdata)) {
+        debugf("Authentication data too large for buffer");
+        return 0;
+      }
   }
 
   
   pthread_mutex_lock(&pool_mut);
   debugf("Authenticating...");
   storage_token[0] = storage_url[0] = '\0';
-  curl_slist *headers = NULL;
-  add_header(&headers, "X-Auth-User", username);
-  add_header(&headers, "X-Auth-Key", password);
+  storage_use_openstack = use_openstack;
+
   CURL *curl = curl_easy_init();
+
+  curl_slist *headers = NULL;
+  if (!use_openstack) {
+    add_header(&headers, "X-Auth-User", username);
+    add_header(&headers, "X-Auth-Key", password);
+  } else {
+    add_header(&headers, "Content-Type", "application/xml");
+    add_header(&headers, "Accept", "application/xml");
+
+    curl_easy_setopt(curl, CURLOPT_POST, 1);
+    curl_easy_setopt(curl, CURLOPT_POSTFIELDS, postdata);
+    curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, strlen(postdata));
+  }
+
   curl_easy_setopt(curl, CURLOPT_VERBOSE, debug);
   curl_easy_setopt(curl, CURLOPT_URL, authurl);
   curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
@@ -414,12 +484,83 @@ int cloudfs_connect(char *username, char *password, char *authurl, int use_snet)
   curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0);
   curl_easy_setopt(curl, CURLOPT_TIMEOUT, 10);
   curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 10);
+
+  if (use_openstack) {
+    xmlctx = xmlCreatePushParserCtxt(NULL, NULL, "", 0, NULL);
+
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, xmlctx);
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, &xml_dispatch);
+  }
+
   curl_easy_perform(curl);
   curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response);
   curl_slist_free_all(headers);
   curl_easy_cleanup(curl);
-  if (use_snet && storage_url[0])
-    rewrite_url_snet(storage_url);
+
+  if (use_openstack) {
+    xmlParseChunk(xmlctx, "", 0, 1);
+    if (xmlctx->wellFormed && response >= 200 && response < 300)
+    {
+      xmlNode *root_element = xmlDocGetRootElement(xmlctx->myDoc);
+      for (top_node = root_element->children; top_node; top_node = top_node->next) {
+        if ((top_node->type == XML_ELEMENT_NODE) &&
+           (!strcasecmp((const char *)top_node->name, "serviceCatalog")))
+        {
+          for (service_node = top_node->children; service_node; service_node = service_node->next)
+            if ((service_node->type == XML_ELEMENT_NODE) &&
+               (!strcasecmp((const char *)service_node->name, "service")))
+            {
+              xmlChar * serviceType = xmlGetProp(service_node, "type");
+              int isObjectStore = serviceType && !strcasecmp(serviceType, "object-store");
+              xmlFree(serviceType);
+
+              if (!isObjectStore) continue;
+
+              for (endpoint_node = service_node->children; endpoint_node; endpoint_node = endpoint_node->next)
+                if ((endpoint_node->type == XML_ELEMENT_NODE) &&
+                   (!strcasecmp((const char *)endpoint_node->name, "endpoint")))
+                {
+                  xmlChar * publicURL = xmlGetProp(endpoint_node, "publicURL");
+                  if (publicURL) {
+                    char copy = 1;
+                    if (storage_url[0]) {
+                      if (strstr(publicURL, "cdn")) {
+                        copy = 0;
+                        debugf("Warning - found multiple object-store services; keeping %s, ignoring %s",
+                                                     storage_url, publicURL);
+                      } else {
+                        debugf("Warning - found multiple object-store services; using %s instead of %s",
+                                                     publicURL, storage_url);
+                      }
+                    }
+                    if (copy) {
+                      strncpy(storage_url, publicURL, sizeof(storage_url));
+                    }
+                  }
+                  xmlFree(publicURL);
+                }
+            }
+        }
+
+        if ((top_node->type == XML_ELEMENT_NODE) &&
+            (!strcasecmp((const char *)top_node->name, "token")))
+              {
+                xmlChar * tokenId = xmlGetProp(top_node, "id");
+                if (tokenId) {
+                  if (storage_token[0]) {
+                    debugf("Warning - found multiple authentication tokens.");
+                  }
+                  strncpy(storage_token, tokenId, sizeof(storage_token));
+                }
+                xmlFree(tokenId);
+              }
+      }
+    }
+    xmlFreeParserCtxt(xmlctx);
+  } else {
+    if (use_snet && storage_url[0])
+      rewrite_url_snet(storage_url);
+  }
   pthread_mutex_unlock(&pool_mut);
   return (response >= 200 && response < 300 && storage_token[0] && storage_url[0]);
 }
