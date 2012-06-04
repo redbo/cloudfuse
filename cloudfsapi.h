@@ -21,6 +21,7 @@ typedef struct dir_entry
   time_t last_modified;
   int isdir;
   struct dir_entry *next;
+  char *marker;
 } dir_entry;
 
 int object_read_fp(const char *path, FILE *fp);

@@ -18,6 +18,9 @@
 
 #define REQUEST_RETRIES 4
 
+// defined by Rackspace
+#define MAX_RESULTS_PER_REQUEST 10000
+
 static char storage_url[MAX_URL_SIZE];
 static char storage_token[MAX_HEADER_SIZE];
 static pthread_mutex_t pool_mut;
@@ -232,13 +235,12 @@ int object_truncate(const char *path, off_t size)
   return (response >= 200 && response < 300);
 }
 
-int list_directory(const char *path, dir_entry **dir_list)
+int list_directory_internal(const char *path, dir_entry **dir_list)
 {
   char container[MAX_PATH_SIZE * 3] = "";
   char object[MAX_PATH_SIZE] = "";
   int response = 0;
-  int retval = 0;
-  *dir_list = NULL;
+  int retval = -1;
   xmlNode *onode = NULL, *anode = NULL, *text_node = NULL;
   xmlParserCtxtPtr xmlctx = xmlCreatePushParserCtxt(NULL, NULL, "", 0, NULL);
   if (!strcmp(path, "") || !strcmp(path, "/"))
@@ -256,10 +258,16 @@ int list_directory(const char *path, dir_entry **dir_list)
     curl_free(encoded_container);
     curl_free(encoded_object);
   }
+  if (*dir_list != NULL) {
+    strcat(container, "&marker=");
+    strcat(container, (*dir_list)->marker);
+  }
+  printf("%s\n", container);
   response = send_request("GET", container, NULL, xmlctx, NULL);
   xmlParseChunk(xmlctx, "", 0, 1);
   if (xmlctx->wellFormed && response >= 200 && response < 300)
   {
+    retval = 0;
     xmlNode *root_element = xmlDocGetRootElement(xmlctx->myDoc);
     for (onode = root_element->children; onode; onode = onode->next)
       if ((onode->type == XML_ELEMENT_NODE) &&
@@ -282,6 +290,7 @@ int list_directory(const char *path, dir_entry **dir_list)
               de->name = strdup(strrchr(content, '/')+1);
             else
               de->name = strdup(content);
+            de->marker = strdup(content);
             if (asprintf(&(de->full_name), "%s/%s", path, de->name) < 0)
               de->full_name = NULL;
           }
@@ -306,12 +315,24 @@ int list_directory(const char *path, dir_entry **dir_list)
              (strstr(de->content_type, "application/directory") != NULL));
         de->next = *dir_list;
         *dir_list = de;
+        retval++;
       }
-    retval = 1;
   }
   xmlFreeDoc(xmlctx->myDoc);
   xmlFreeParserCtxt(xmlctx);
   return retval;
+}
+
+int list_directory(const char *path, dir_entry **dir_list)
+{
+  int retval;
+  *dir_list = NULL;
+
+  do {
+    retval = list_directory_internal(path, dir_list);
+  } while(retval == MAX_RESULTS_PER_REQUEST);
+
+  return retval == -1 ? 0 : 1;
 }
 
 void free_dir_list(dir_entry *dir_list)
