@@ -156,7 +156,11 @@ static int send_request(char *method, const char *path, FILE *fp, xmlParserCtxtP
       {
         rewind(fp); // make sure the file is ready for a-writin'
         fflush(fp);
-        ftruncate(fileno(fp), 0);
+        if (ftruncate(fileno(fp), 0) < 0)
+        {
+          debugf("ftruncate failed.  I don't know what to do about that.");
+          abort();
+        }
         curl_easy_setopt(curl, CURLOPT_WRITEDATA, fp);
       }
       else if (xmlctx)
