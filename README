@@ -52,6 +52,7 @@ USE:
         authurl=[authentication url - connect to non-Rackspace (swift) cluster]
         use_openstack=[True if using OpenStack Keystone]
         tenant=[Tenant for authentication with Keystone]
+        verify_ssl=[False to disable SSL cert verification]
 
     It also inherits a number of command-line arguments and mount options from
     the Fuse framework.  The "-h" argument should provide a summary.
