@@ -238,6 +238,7 @@ int list_directory(const char *path, dir_entry **dir_list)
 {
   char container[MAX_PATH_SIZE * 3] = "";
   char object[MAX_PATH_SIZE] = "";
+  char last_subdir[MAX_PATH_SIZE] = "";
   int prefix_length = 0;
   int response = 0;
   int retval = 0;
@@ -260,9 +261,10 @@ int list_directory(const char *path, dir_entry **dir_list)
     // The empty path doesn't get a trailing slash, everything else does
     char *trailing_slash;
     prefix_length = strlen(object);
-    if (object[0] == 0) {
+    if (object[0] == 0)
       trailing_slash = "";
-    } else {
+    else
+    {
       trailing_slash = "/";
       prefix_length++;
     }
@@ -272,6 +274,7 @@ int list_directory(const char *path, dir_entry **dir_list)
     curl_free(encoded_container);
     curl_free(encoded_object);
   }
+
   response = send_request("GET", container, NULL, xmlctx, NULL);
   xmlParseChunk(xmlctx, "", 0, 1);
   if (xmlctx->wellFormed && response >= 200 && response < 300)
@@ -290,11 +293,11 @@ int list_directory(const char *path, dir_entry **dir_list)
         entry_count++;
 
         dir_entry *de = (dir_entry *)malloc(sizeof(dir_entry));
+        de->next = NULL;
         de->size = 0;
         de->last_modified = time(NULL);
-        if (is_container || is_subdir) {
+        if (is_container || is_subdir)
           de->content_type = strdup("application/directory");
-        }
         for (anode = onode->children; anode; anode = anode->next)
         {
           char *content = "<?!?>";
@@ -306,10 +309,9 @@ int list_directory(const char *path, dir_entry **dir_list)
             de->name = strdup(content + prefix_length);
 
             // Remove trailing slash
-            char * slash = strrchr(de->name, '/');
-            if (slash && (0 == *(slash + 1))) {
+            char *slash = strrchr(de->name, '/');
+            if (slash && (0 == *(slash + 1)))
               *slash = 0;
-            }
 
             if (asprintf(&(de->full_name), "%s/%s", path, de->name) < 0)
               de->full_name = NULL;
@@ -333,9 +335,20 @@ int list_directory(const char *path, dir_entry **dir_list)
         de->isdir = de->content_type &&
             ((strstr(de->content_type, "application/folder") != NULL) ||
              (strstr(de->content_type, "application/directory") != NULL));
+        if (de->isdir)
+        {
+          if (!strncasecmp(de->name, last_subdir, sizeof(last_subdir)))
+          {
+            free_dir_list(de);
+            continue;
+          }
+          strncpy(last_subdir, de->name, sizeof(last_subdir));
+        }
         de->next = *dir_list;
         *dir_list = de;
-      } else {
+      }
+      else
+      {
         debugf("unknown element: %s", onode->name);
       }
     }
@@ -439,21 +452,22 @@ int cloudfs_connect(char *username, char *tenant, char *password, char *authurl,
     use_openstack = reconnect_args.use_openstack;
   }
 
-  char postdata[2048];
-  if (use_openstack) {
-      int count = snprintf(postdata, sizeof(postdata),
-                           "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
-                           "<auth xmlns=\"http://docs.openstack.org/identity/api/v2.0\" tenantName=\"%s\">"
-                           "<passwordCredentials username=\"%s\" password=\"%s\"/>"
-                           "</auth>",
-                           tenant, username, password);
-      if (count >= sizeof(postdata)) {
-        debugf("Authentication data too large for buffer");
-        return 0;
+  char *postdata;
+  if (use_openstack)
+  {
+      int count = asprintf(&postdata,
+         "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
+         "<auth xmlns=\"http://docs.openstack.org/identity/api/v2.0\" tenantName=\"%s\">"
+         "<passwordCredentials username=\"%s\" password=\"%s\"/>"
+         "</auth>",
+         tenant, username, password);
+      if (count < 0)
+      {
+        debugf("Unable to asprintf");
+        abort();
       }
   }
 
-  
   pthread_mutex_lock(&pool_mut);
   debugf("Authenticating...");
   storage_token[0] = storage_url[0] = '\0';
@@ -462,16 +476,23 @@ int cloudfs_connect(char *username, char *tenant, char *password, char *authurl,
   CURL *curl = curl_easy_init();
 
   curl_slist *headers = NULL;
-  if (!use_openstack) {
-    add_header(&headers, "X-Auth-User", username);
-    add_header(&headers, "X-Auth-Key", password);
-  } else {
+  if (use_openstack)
+  {
     add_header(&headers, "Content-Type", "application/xml");
     add_header(&headers, "Accept", "application/xml");
 
     curl_easy_setopt(curl, CURLOPT_POST, 1);
     curl_easy_setopt(curl, CURLOPT_POSTFIELDS, postdata);
     curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, strlen(postdata));
+
+    xmlctx = xmlCreatePushParserCtxt(NULL, NULL, "", 0, NULL);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, xmlctx);
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, &xml_dispatch);
+  }
+  else
+  {
+    add_header(&headers, "X-Auth-User", username);
+    add_header(&headers, "X-Auth-Key", password);
   }
 
   curl_easy_setopt(curl, CURLOPT_VERBOSE, debug);
@@ -485,24 +506,20 @@ int cloudfs_connect(char *username, char *tenant, char *password, char *authurl,
   curl_easy_setopt(curl, CURLOPT_TIMEOUT, 10);
   curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 10);
 
-  if (use_openstack) {
-    xmlctx = xmlCreatePushParserCtxt(NULL, NULL, "", 0, NULL);
-
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, xmlctx);
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, &xml_dispatch);
-  }
-
   curl_easy_perform(curl);
   curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response);
   curl_slist_free_all(headers);
   curl_easy_cleanup(curl);
 
-  if (use_openstack) {
+  if (use_openstack)
+  {
+    free(postdata);
     xmlParseChunk(xmlctx, "", 0, 1);
     if (xmlctx->wellFormed && response >= 200 && response < 300)
     {
       xmlNode *root_element = xmlDocGetRootElement(xmlctx->myDoc);
-      for (top_node = root_element->children; top_node; top_node = top_node->next) {
+      for (top_node = root_element->children; top_node; top_node = top_node->next)
+      {
         if ((top_node->type == XML_ELEMENT_NODE) &&
            (!strcasecmp((const char *)top_node->name, "serviceCatalog")))
         {
@@ -521,21 +538,23 @@ int cloudfs_connect(char *username, char *tenant, char *password, char *authurl,
                    (!strcasecmp((const char *)endpoint_node->name, "endpoint")))
                 {
                   xmlChar * publicURL = xmlGetProp(endpoint_node, "publicURL");
-                  if (publicURL) {
+                  if (publicURL)
+                  {
                     char copy = 1;
-                    if (storage_url[0]) {
-                      if (strstr(publicURL, "cdn")) {
+                    if (storage_url[0])
+                    {
+                      if (strstr(publicURL, "cdn"))
+                      {
                         copy = 0;
                         debugf("Warning - found multiple object-store services; keeping %s, ignoring %s",
                                                      storage_url, publicURL);
-                      } else {
+                      }
+                      else
                         debugf("Warning - found multiple object-store services; using %s instead of %s",
                                                      publicURL, storage_url);
-                      }
                     }
-                    if (copy) {
+                    if (copy)
                       strncpy(storage_url, publicURL, sizeof(storage_url));
-                    }
                   }
                   xmlFree(publicURL);
                 }
@@ -544,23 +563,22 @@ int cloudfs_connect(char *username, char *tenant, char *password, char *authurl,
 
         if ((top_node->type == XML_ELEMENT_NODE) &&
             (!strcasecmp((const char *)top_node->name, "token")))
-              {
-                xmlChar * tokenId = xmlGetProp(top_node, "id");
-                if (tokenId) {
-                  if (storage_token[0]) {
-                    debugf("Warning - found multiple authentication tokens.");
-                  }
-                  strncpy(storage_token, tokenId, sizeof(storage_token));
-                }
-                xmlFree(tokenId);
-              }
+        {
+          xmlChar * tokenId = xmlGetProp(top_node, "id");
+          if (tokenId)
+          {
+            if (storage_token[0])
+              debugf("Warning - found multiple authentication tokens.");
+            strncpy(storage_token, tokenId, sizeof(storage_token));
+          }
+          xmlFree(tokenId);
+        }
       }
     }
     xmlFreeParserCtxt(xmlctx);
-  } else {
-    if (use_snet && storage_url[0])
-      rewrite_url_snet(storage_url);
   }
+  if (use_snet && storage_url[0])
+    rewrite_url_snet(storage_url);
   pthread_mutex_unlock(&pool_mut);
   return (response >= 200 && response < 300 && storage_token[0] && storage_url[0]);
 }
