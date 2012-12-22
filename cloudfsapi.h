@@ -32,6 +32,7 @@ int create_directory(const char *label);
 int cloudfs_connect(char *username, char *tenant, char *password,
                     char *authurl, int snet_rewrite, int use_openstack);
 void cloudfs_debug(int dbg);
+void cloudfs_verify_ssl(int dbg);
 void free_dir_list(dir_entry *dir_list);
 int object_truncate(const char *path, off_t size);
 

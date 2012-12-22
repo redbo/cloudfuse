@@ -426,6 +426,7 @@ static struct options {
     char authurl[OPTION_SIZE];
     char use_snet[OPTION_SIZE];
     char use_openstack[OPTION_SIZE];
+    char verify_ssl[OPTION_SIZE];
 } options = {
     .username = "",
     .api_key = "",
@@ -434,6 +435,7 @@ static struct options {
     .authurl = "https://auth.api.rackspacecloud.com/v1.0",
     .use_snet = "false",
     .use_openstack = "false",
+    .verify_ssl = "true",
 };
 
 int parse_option(void *data, const char *arg, int key, struct fuse_args *outargs)
@@ -444,7 +446,8 @@ int parse_option(void *data, const char *arg, int key, struct fuse_args *outargs
       sscanf(arg, " cache_timeout = %[^\r\n ]", options.cache_timeout) ||
       sscanf(arg, " authurl = %[^\r\n ]", options.authurl) ||
       sscanf(arg, " use_snet = %[^\r\n ]", options.use_snet) ||
-      sscanf(arg, " use_openstack = %[^\r\n ]", options.use_openstack))
+      sscanf(arg, " use_openstack = %[^\r\n ]", options.use_openstack) ||
+      sscanf(arg, " verify_ssl = %[^\r\n ]", options.verify_ssl))
     return 0;
   if (!strcmp(arg, "-f") || !strcmp(arg, "-d") || !strcmp(arg, "debug"))
     cloudfs_debug(1);
@@ -456,7 +459,7 @@ int main(int argc, char **argv)
   char settings_filename[MAX_PATH_SIZE] = "";
   FILE *settings;
   struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
- 
+
   fuse_opt_parse(&args, &options, NULL, parse_option);
 
   snprintf(settings_filename, sizeof(settings_filename), "%s/.cloudfuse", get_home_dir());
@@ -480,11 +483,14 @@ int main(int argc, char **argv)
     fprintf(stderr, "  api_key=[Mosso api key]\n\n");
     fprintf(stderr, "These entries are optional:\n\n");
     fprintf(stderr, "  cache_timeout=[seconds for directory caching]\n");
-    fprintf(stderr, "  use_snet=[True to connect to snet]\n");
+    fprintf(stderr, "  use_snet=[True to connect to snet (Rackspace-specific)]\n");
     fprintf(stderr, "  use_openstack=[True to connect to OpenStack]\n");
-    fprintf(stderr, "  authurl=[used for testing]\n");
+    fprintf(stderr, "  authurl=[Point to a non-Rackspace (Openstack) auth endpoint]\n");
+    fprintf(stderr, "  verify_ssl=[False to disable ssl verification]\n");
     return 1;
   }
+
+  cloudfs_verify_ssl(!strcasecmp(options.verify_ssl, "true"));
 
   if (!cloudfs_connect(options.username, options.tenant, options.api_key, options.authurl,
         !strcasecmp(options.use_snet, "true"),

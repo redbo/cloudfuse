@@ -25,6 +25,7 @@ static pthread_mutex_t pool_mut;
 static CURL *curl_pool[1024];
 static int curl_pool_count = 0;
 static int debug = 0;
+static int verify_ssl = 1;
 
 #ifdef HAVE_OPENSSL
 #include <openssl/crypto.h>
@@ -68,7 +69,6 @@ static void rewrite_url_snet(char *url)
 
 static size_t xml_dispatch(void *ptr, size_t size, size_t nmemb, void *stream)
 {
-  debugf("xml data: %s", ptr);
   xmlParseChunk((xmlParserCtxtPtr)stream, (char *)ptr, size * nmemb, 0);
   return size * nmemb;
 }
@@ -104,8 +104,8 @@ static CURL *get_connection(const char *path)
   curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1);
   curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 1);
   curl_easy_setopt(curl, CURLOPT_USERAGENT, USER_AGENT);
-  curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0);
-  curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0);
+  curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, verify_ssl);
+  curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, verify_ssl);
   curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 10);
   return curl;
 }
@@ -412,6 +412,11 @@ void cloudfs_debug(int dbg)
   debug = dbg;
 }
 
+void cloudfs_verify_ssl(int vrfy)
+{
+  verify_ssl - vrfy;
+}
+
 off_t file_size(int fd)
 {
   struct stat buf;
@@ -505,10 +510,11 @@ int cloudfs_connect(char *username, char *tenant, char *password, char *authurl,
   curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, &header_dispatch);
   curl_easy_setopt(curl, CURLOPT_USERAGENT, USER_AGENT);
   curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1);
-  curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0);
-  curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0);
+  curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, verify_ssl);
+  curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, verify_ssl);
   curl_easy_setopt(curl, CURLOPT_TIMEOUT, 10);
   curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 10);
+  curl_easy_setopt(curl, CURLOPT_FORBID_REUSE, 1);
 
   curl_easy_perform(curl);
   curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response);
