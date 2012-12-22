@@ -21,6 +21,9 @@ BUILDING:
         apt-get install build-essential libcurl4-openssl-dev libxml2-dev \
              libssl-dev libfuse-dev
 
+    For CentOS or similar,
+        yum install gcc make fuse-devel curl-devel libxml2-devel openssl-devel
+
     Cloudfuse is built and installed like any other autoconf configured code.
     Normally,
         ./configure
