@@ -29,7 +29,8 @@ int list_directory(const char *path, dir_entry **);
 int delete_object(const char *path);
 int copy_object(const char *src, const char *dst);
 int create_directory(const char *label);
-int cloudfs_connect(char *username, char *password, char *authurl, int snet_rewrite);
+int cloudfs_connect(char *username, char *tenant, char *password,
+                    char *authurl, int snet_rewrite, int use_openstack);
 void cloudfs_debug(int dbg);
 void free_dir_list(dir_entry *dir_list);
 int object_truncate(const char *path, off_t size);
@@ -38,6 +39,7 @@ void load_mimetypes(const char *filename);
 off_t file_size(int fd);
 
 size_t header_dispatch(void *ptr, size_t size, size_t nmemb, void *stream);
+size_t content_handler(char *ptr, size_t size, size_t nmemb, void *userdata);
 
 void debugf(char *fmt, ...);
 #endif
