@@ -89,10 +89,14 @@ BUGS/SHORTCOMINGS:
 
 AWESOME CONTRIBUTORS:
 
-    * Tim Dysinger fixed the Makefile              https://github.com/dysinger
-    * Chris Wedgwood made du work by fixing stat   https://github.com/cwedgwood
-    * Nick Craig-Wood implemented rename           https://github.com/ncw
-    * Dillon Amburgey made it compile on clang     https://github.com/dillona
+    * Tim Dysinger                                 https://github.com/dysinger
+    * Chris Wedgwood                               https://github.com/cwedgwood
+    * Nick Craig-Wood                              https://github.com/ncw
+    * Dillon Amburgey                              https://github.com/dillona
+    * Manfred Touron                               https://github.com/moul
+    * David Brownlee                               https://github.com/abs0
+    * Mike Lundy                                   https://github.com/novas0x2a
+    * justinb                                      https://github.com/justinsb
 
 
 Thanks, and I hope you find it useful.
