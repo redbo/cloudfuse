@@ -20,7 +20,6 @@
 
 static char storage_url[MAX_URL_SIZE];
 static char storage_token[MAX_HEADER_SIZE];
-static int storage_use_openstack = 0;
 static pthread_mutex_t pool_mut;
 static CURL *curl_pool[1024];
 static int curl_pool_count = 0;
@@ -186,7 +185,7 @@ static int send_request(char *method, const char *path, FILE *fp, xmlParserCtxtP
     if (response >= 200 && response < 400)
       return response;
     sleep(8 << tries); // backoff
-    if (response == 401 && !cloudfs_connect(0, 0, 0, 0, 0, 0)) // re-authenticate on 401s
+    if (response == 401 && !cloudfs_connect()) // re-authenticate on 401s
       return response;
     if (xmlctx)
       xmlCtxtResetPush(xmlctx, NULL, 0, NULL, NULL);
@@ -424,52 +423,42 @@ off_t file_size(int fd)
   return buf.st_size;
 }
 
-int cloudfs_connect(char *username, char *tenant, char *password, char *authurl, int use_snet, int use_openstack)
+static struct {
+  char username[MAX_HEADER_SIZE], password[MAX_HEADER_SIZE],
+       tenant[MAX_HEADER_SIZE],
+       authurl[MAX_URL_SIZE], use_snet, use_openstack;
+} reconnect_args;
+
+void cloudfs_set_credentials(char *username, char *tenant, char *password, char *authurl, int use_snet, int use_openstack)
 {
-  static struct {
-    char username[MAX_HEADER_SIZE], password[MAX_HEADER_SIZE],
-         tenant[MAX_HEADER_SIZE],
-         authurl[MAX_URL_SIZE], use_snet, use_openstack;
-  } reconnect_args;
+  LIBXML_TEST_VERSION
+  init_locks();
+  curl_global_init(CURL_GLOBAL_ALL);
+  strncpy(reconnect_args.username, username, sizeof(reconnect_args.username));
+  strncpy(reconnect_args.tenant, tenant, sizeof(reconnect_args.tenant));
+  strncpy(reconnect_args.password, password, sizeof(reconnect_args.password));
+  strncpy(reconnect_args.authurl, authurl, sizeof(reconnect_args.authurl));
+  reconnect_args.use_snet = use_snet;
+  reconnect_args.use_openstack = use_openstack;
+}
+
+int cloudfs_connect()
+{
 
   long response = -1;
-  static int initialized = 0;
 
   xmlNode *top_node = NULL, *service_node = NULL, *endpoint_node = NULL;
   xmlParserCtxtPtr xmlctx = NULL;
 
-  if (!initialized)
-  {
-    LIBXML_TEST_VERSION
-    init_locks();
-    curl_global_init(CURL_GLOBAL_ALL);
-    strncpy(reconnect_args.username, username, sizeof(reconnect_args.username));
-    strncpy(reconnect_args.tenant, tenant, sizeof(reconnect_args.tenant));
-    strncpy(reconnect_args.password, password, sizeof(reconnect_args.password));
-    strncpy(reconnect_args.authurl, authurl, sizeof(reconnect_args.authurl));
-    reconnect_args.use_snet = use_snet;
-    reconnect_args.use_openstack = use_openstack;
-    initialized = 1;
-  }
-  else
-  {
-    username = reconnect_args.username;
-    tenant = reconnect_args.tenant;
-    password = reconnect_args.password;
-    authurl = reconnect_args.authurl;
-    use_snet = reconnect_args.use_snet;
-    use_openstack = reconnect_args.use_openstack;
-  }
-
   char *postdata;
-  if (use_openstack)
+  if (reconnect_args.use_openstack)
   {
       int count = asprintf(&postdata,
          "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
          "<auth xmlns=\"http://docs.openstack.org/identity/api/v2.0\" tenantName=\"%s\">"
          "<passwordCredentials username=\"%s\" password=\"%s\"/>"
          "</auth>",
-         tenant, username, password);
+         reconnect_args.tenant, reconnect_args.username, reconnect_args.password);
       if (count < 0)
       {
         debugf("Unable to asprintf");
@@ -480,12 +469,11 @@ int cloudfs_connect(char *username, char *tenant, char *password, char *authurl,
   pthread_mutex_lock(&pool_mut);
   debugf("Authenticating...");
   storage_token[0] = storage_url[0] = '\0';
-  storage_use_openstack = use_openstack;
 
   CURL *curl = curl_easy_init();
 
   curl_slist *headers = NULL;
-  if (use_openstack)
+  if (reconnect_args.use_openstack)
   {
     add_header(&headers, "Content-Type", "application/xml");
     add_header(&headers, "Accept", "application/xml");
@@ -500,12 +488,12 @@ int cloudfs_connect(char *username, char *tenant, char *password, char *authurl,
   }
   else
   {
-    add_header(&headers, "X-Auth-User", username);
-    add_header(&headers, "X-Auth-Key", password);
+    add_header(&headers, "X-Auth-User", reconnect_args.username);
+    add_header(&headers, "X-Auth-Key", reconnect_args.password);
   }
 
   curl_easy_setopt(curl, CURLOPT_VERBOSE, debug);
-  curl_easy_setopt(curl, CURLOPT_URL, authurl);
+  curl_easy_setopt(curl, CURLOPT_URL, reconnect_args.authurl);
   curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
   curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, &header_dispatch);
   curl_easy_setopt(curl, CURLOPT_USERAGENT, USER_AGENT);
@@ -521,7 +509,7 @@ int cloudfs_connect(char *username, char *tenant, char *password, char *authurl,
   curl_slist_free_all(headers);
   curl_easy_cleanup(curl);
 
-  if (use_openstack)
+  if (reconnect_args.use_openstack)
   {
     free(postdata);
     xmlParseChunk(xmlctx, "", 0, 1);
@@ -587,7 +575,7 @@ int cloudfs_connect(char *username, char *tenant, char *password, char *authurl,
     }
     xmlFreeParserCtxt(xmlctx);
   }
-  if (use_snet && storage_url[0])
+  if (reconnect_args.use_snet && storage_url[0])
     rewrite_url_snet(storage_url);
   pthread_mutex_unlock(&pool_mut);
   return (response >= 200 && response < 300 && storage_token[0] && storage_url[0]);

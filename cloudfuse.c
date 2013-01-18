@@ -407,6 +407,17 @@ static int cfs_rename(const char *src, const char *dst)
   return -EIO;
 }
 
+static void *cfs_init(struct fuse_conn_info *conn)
+{
+  signal(SIGPIPE, SIG_IGN);
+  if (!cloudfs_connect())
+  {
+    debugf("Failed to authenticate.");
+    abort();
+  }
+  return NULL;
+}
+
 char *get_home_dir()
 {
   char *home;
@@ -492,13 +503,9 @@ int main(int argc, char **argv)
 
   cloudfs_verify_ssl(!strcasecmp(options.verify_ssl, "true"));
 
-  if (!cloudfs_connect(options.username, options.tenant, options.api_key, options.authurl,
+  cloudfs_set_credentials(options.username, options.tenant, options.api_key, options.authurl,
         !strcasecmp(options.use_snet, "true"),
-        !strcasecmp(options.use_openstack, "true")))
-  {
-    fprintf(stderr, "Unable to authenticate.\n");
-    return 1;
-  }
+        !strcasecmp(options.use_openstack, "true"));
 
   #ifndef HAVE_OPENSSL
   #warning Compiling without libssl, will run single-threaded.
@@ -525,10 +532,10 @@ int main(int argc, char **argv)
     .chmod = cfs_chmod,
     .chown = cfs_chown,
     .rename = cfs_rename,
+    .init = cfs_init,
   };
 
   pthread_mutex_init(&dmut, NULL);
-  signal(SIGPIPE, SIG_IGN);
   return fuse_main(args.argc, args.argv, &cfs_oper, &options);
 }
 
