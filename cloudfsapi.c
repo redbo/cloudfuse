@@ -413,7 +413,7 @@ void cloudfs_debug(int dbg)
 
 void cloudfs_verify_ssl(int vrfy)
 {
-  verify_ssl - vrfy;
+  verify_ssl = vrfy;
 }
 
 off_t file_size(int fd)
