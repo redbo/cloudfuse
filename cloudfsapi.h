@@ -29,6 +29,7 @@ int list_directory(const char *path, dir_entry **);
 int delete_object(const char *path);
 int copy_object(const char *src, const char *dst);
 int create_directory(const char *label);
+void cloudfs_init();
 void cloudfs_set_credentials(char *username, char *tenant, char *password,
                              char *authurl, int snet_rewrite, int use_openstack);
 int cloufds_connect();

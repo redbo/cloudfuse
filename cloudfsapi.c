@@ -43,18 +43,28 @@ static unsigned long thread_id()
 }
 #endif
 
-void init_locks()
+void cloudfs_init()
 {
+  LIBXML_TEST_VERSION
+  curl_global_init(CURL_GLOBAL_ALL);
   pthread_mutex_init(&pool_mut, NULL);
-  #ifdef HAVE_OPENSSL
-  int i;
-  ssl_lockarray = (pthread_mutex_t *)OPENSSL_malloc(CRYPTO_num_locks() *
-                                            sizeof(pthread_mutex_t));
-  for (i = 0; i < CRYPTO_num_locks(); i++)
-    pthread_mutex_init(&(ssl_lockarray[i]), NULL);
-  CRYPTO_set_id_callback((unsigned long (*)())thread_id);
-  CRYPTO_set_locking_callback((void (*)())lock_callback);
-  #endif
+  curl_version_info_data *cvid = curl_version_info(CURLVERSION_NOW);
+  if (!strncasecmp(cvid->ssl_version, "openssl", 7))
+  {
+    #ifdef HAVE_OPENSSL
+    int i;
+    ssl_lockarray = (pthread_mutex_t *)OPENSSL_malloc(CRYPTO_num_locks() *
+                                              sizeof(pthread_mutex_t));
+    for (i = 0; i < CRYPTO_num_locks(); i++)
+      pthread_mutex_init(&(ssl_lockarray[i]), NULL);
+    CRYPTO_set_id_callback((unsigned long (*)())thread_id);
+    CRYPTO_set_locking_callback((void (*)())lock_callback);
+    #endif
+  }
+  if (!strncasecmp(cvid->ssl_version, "nss", 3))
+  {
+    // re-initialize NSS
+  }
 }
 
 static void rewrite_url_snet(char *url)
@@ -431,9 +441,6 @@ static struct {
 
 void cloudfs_set_credentials(char *username, char *tenant, char *password, char *authurl, int use_snet, int use_openstack)
 {
-  LIBXML_TEST_VERSION
-  init_locks();
-  curl_global_init(CURL_GLOBAL_ALL);
   strncpy(reconnect_args.username, username, sizeof(reconnect_args.username));
   strncpy(reconnect_args.tenant, tenant, sizeof(reconnect_args.tenant));
   strncpy(reconnect_args.password, password, sizeof(reconnect_args.password));

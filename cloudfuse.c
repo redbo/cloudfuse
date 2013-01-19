@@ -409,6 +409,7 @@ static int cfs_rename(const char *src, const char *dst)
 
 static void *cfs_init(struct fuse_conn_info *conn)
 {
+  cloudfs_init();
   signal(SIGPIPE, SIG_IGN);
   if (!cloudfs_connect())
   {
