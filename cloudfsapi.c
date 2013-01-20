@@ -84,13 +84,7 @@ static size_t xml_dispatch(void *ptr, size_t size, size_t nmemb, void *stream)
 
 static CURL *get_connection(const char *path)
 {
-  char url[MAX_URL_SIZE];
   pthread_mutex_lock(&pool_mut);
-  if (!storage_url[0])
-  {
-    debugf("get_connection with no storage_url?");
-    abort();
-  }
   CURL *curl = curl_pool_count ? curl_pool[--curl_pool_count] : curl_easy_init();
   if (!curl)
   {
@@ -98,29 +92,11 @@ static CURL *get_connection(const char *path)
     abort();
   }
   pthread_mutex_unlock(&pool_mut);
-  char *slash;
-  while ((slash = strstr(path, "%2F")) || (slash = strstr(path, "%2f")))
-  {
-    *slash = '/';
-    memmove(slash+1, slash+3, strlen(slash+3)+1);
-  }
-  while (*path == '/')
-    path++;
-  snprintf(url, sizeof(url), "%s/%s", storage_url, path);
-  curl_easy_setopt(curl, CURLOPT_URL, url);
-  curl_easy_setopt(curl, CURLOPT_VERBOSE, debug);
-  curl_easy_setopt(curl, CURLOPT_HEADER, 0);
-  curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1);
-  curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 1);
-  curl_easy_setopt(curl, CURLOPT_USERAGENT, USER_AGENT);
-  curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, verify_ssl);
-  curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 10);
   return curl;
 }
 
 static void return_connection(CURL *curl)
 {
-  curl_easy_reset(curl);
   pthread_mutex_lock(&pool_mut);
   curl_pool[curl_pool_count++] = curl;
   pthread_mutex_unlock(&pool_mut);
@@ -135,16 +111,40 @@ void add_header(curl_slist **headers, const char *name, const char *value)
 
 static int send_request(char *method, const char *path, FILE *fp, xmlParserCtxtPtr xmlctx, curl_slist *extra_headers)
 {
+  char url[MAX_URL_SIZE];
+  char *slash;
   long response = -1;
   int tries = 0;
+
+  if (!storage_url[0])
+  {
+    debugf("send_request with no storage_url?");
+    abort();
+  }
+
+  while ((slash = strstr(path, "%2F")) || (slash = strstr(path, "%2f")))
+  {
+    *slash = '/';
+    memmove(slash+1, slash+3, strlen(slash+3)+1);
+  }
+  while (*path == '/')
+    path++;
+  snprintf(url, sizeof(url), "%s/%s", storage_url, path);
 
   // retry on failures
   for (tries = 0; tries < REQUEST_RETRIES; tries++)
   {
     CURL *curl = get_connection(path);
     curl_slist *headers = NULL;
-    add_header(&headers, "X-Auth-Token", storage_token);
+    curl_easy_setopt(curl, CURLOPT_URL, url);
+    curl_easy_setopt(curl, CURLOPT_HEADER, 0);
+    curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1);
+    curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 1);
+    curl_easy_setopt(curl, CURLOPT_USERAGENT, USER_AGENT);
+    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, verify_ssl);
+    curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 10);
     curl_easy_setopt(curl, CURLOPT_VERBOSE, debug);
+    add_header(&headers, "X-Auth-Token", storage_token);
     if (!strcasecmp(method, "MKDIR"))
     {
       curl_easy_setopt(curl, CURLOPT_UPLOAD, 1);
@@ -190,6 +190,7 @@ static int send_request(char *method, const char *path, FILE *fp, xmlParserCtxtP
     curl_easy_perform(curl);
     curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response);
     curl_slist_free_all(headers);
+    curl_easy_reset(curl);
     return_connection(curl);
     if (response >= 200 && response < 400)
       return response;
