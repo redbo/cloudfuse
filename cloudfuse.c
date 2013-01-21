@@ -472,8 +472,6 @@ int main(int argc, char **argv)
   FILE *settings;
   struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
 
-  fuse_opt_parse(&args, &options, NULL, parse_option);
-
   snprintf(settings_filename, sizeof(settings_filename), "%s/.cloudfuse", get_home_dir());
   if ((settings = fopen(settings_filename, "r")))
   {
@@ -482,6 +480,8 @@ int main(int argc, char **argv)
       parse_option(NULL, line, -1, &args);
     fclose(settings);
   }
+
+  fuse_opt_parse(&args, &options, NULL, parse_option);
 
   cache_timeout = atoi(options.cache_timeout);
 

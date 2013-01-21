@@ -102,14 +102,9 @@ static CURL *get_connection(const char *path)
 
 static void return_connection(CURL *curl)
 {
-  if (no_handle_reuse)
-    curl_easy_cleanup(curl);
-  else
-  {
-    pthread_mutex_lock(&pool_mut);
-    curl_pool[curl_pool_count++] = curl;
-    pthread_mutex_unlock(&pool_mut);
-  }
+  pthread_mutex_lock(&pool_mut);
+  curl_pool[curl_pool_count++] = curl;
+  pthread_mutex_unlock(&pool_mut);
 }
 
 void add_header(curl_slist **headers, const char *name, const char *value)
@@ -200,8 +195,13 @@ static int send_request(char *method, const char *path, FILE *fp, xmlParserCtxtP
     curl_easy_perform(curl);
     curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response);
     curl_slist_free_all(headers);
-    curl_easy_reset(curl);
-    return_connection(curl);
+    if (no_handle_reuse)
+      curl_easy_cleanup(curl);
+    else
+    {
+      curl_easy_reset(curl);
+      return_connection(curl);
+    }
     if (response >= 200 && response < 400)
       return response;
     sleep(8 << tries); // backoff
