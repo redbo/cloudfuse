@@ -44,34 +44,6 @@ static unsigned long thread_id()
 }
 #endif
 
-void cloudfs_init()
-{
-  LIBXML_TEST_VERSION
-  curl_global_init(CURL_GLOBAL_ALL);
-  pthread_mutex_init(&pool_mut, NULL);
-  curl_version_info_data *cvid = curl_version_info(CURLVERSION_NOW);
-
-  // CentOS/RHEL 5 get stupid mode, because they have a broken libcurl
-  no_handle_reuse = (cvid->version_num == 462597);
-
-  if (!strncasecmp(cvid->ssl_version, "openssl", 7))
-  {
-    #ifdef HAVE_OPENSSL
-    int i;
-    ssl_lockarray = (pthread_mutex_t *)OPENSSL_malloc(CRYPTO_num_locks() *
-                                              sizeof(pthread_mutex_t));
-    for (i = 0; i < CRYPTO_num_locks(); i++)
-      pthread_mutex_init(&(ssl_lockarray[i]), NULL);
-    CRYPTO_set_id_callback((unsigned long (*)())thread_id);
-    CRYPTO_set_locking_callback((void (*)())lock_callback);
-    #endif
-  }
-  if (!strncasecmp(cvid->ssl_version, "nss", 3))
-  {
-    // TODO re-initialize NSS in some awesome way that makes it work after a fork
-  }
-}
-
 static void rewrite_url_snet(char *url)
 {
   char protocol[MAX_URL_SIZE];
@@ -107,7 +79,7 @@ static void return_connection(CURL *curl)
   pthread_mutex_unlock(&pool_mut);
 }
 
-void add_header(curl_slist **headers, const char *name, const char *value)
+static void add_header(curl_slist **headers, const char *name, const char *value)
 {
   char x_header[MAX_HEADER_SIZE];
   snprintf(x_header, sizeof(x_header), "%s: %s", name, value);
@@ -160,7 +132,7 @@ static int send_request(char *method, const char *path, FILE *fp, xmlParserCtxtP
     {
       rewind(fp);
       curl_easy_setopt(curl, CURLOPT_UPLOAD, 1);
-      curl_easy_setopt(curl, CURLOPT_INFILESIZE, file_size(fileno(fp)));
+      curl_easy_setopt(curl, CURLOPT_INFILESIZE, cloudfs_file_size(fileno(fp)));
       curl_easy_setopt(curl, CURLOPT_READDATA, fp);
     }
     else if (!strcasecmp(method, "GET"))
@@ -213,11 +185,56 @@ static int send_request(char *method, const char *path, FILE *fp, xmlParserCtxtP
   return response;
 }
 
+static size_t header_dispatch(void *ptr, size_t size, size_t nmemb, void *stream)
+{
+  char *header = (char *)alloca(size * nmemb + 1);
+  char *head = (char *)alloca(size * nmemb + 1);
+  char *value = (char *)alloca(size * nmemb + 1);
+  memcpy(header, (char *)ptr, size * nmemb);
+  header[size * nmemb] = '\0';
+  if (sscanf(header, "%[^:]: %[^\r\n]", head, value) == 2)
+  {
+    if (!strncasecmp(head, "x-auth-token", size * nmemb))
+      strncpy(storage_token, value, sizeof(storage_token));
+    if (!strncasecmp(head, "x-storage-url", size * nmemb))
+      strncpy(storage_url, value, sizeof(storage_url));
+  }
+  return size * nmemb;
+}
+
 /*
  * Public interface
  */
 
-int object_read_fp(const char *path, FILE *fp)
+void cloudfs_init()
+{
+  LIBXML_TEST_VERSION
+  curl_global_init(CURL_GLOBAL_ALL);
+  pthread_mutex_init(&pool_mut, NULL);
+  curl_version_info_data *cvid = curl_version_info(CURLVERSION_NOW);
+
+  // CentOS/RHEL 5 get stupid mode, because they have a broken libcurl
+  no_handle_reuse = (cvid->version_num == 462597);
+
+  if (!strncasecmp(cvid->ssl_version, "openssl", 7))
+  {
+    #ifdef HAVE_OPENSSL
+    int i;
+    ssl_lockarray = (pthread_mutex_t *)OPENSSL_malloc(CRYPTO_num_locks() *
+                                              sizeof(pthread_mutex_t));
+    for (i = 0; i < CRYPTO_num_locks(); i++)
+      pthread_mutex_init(&(ssl_lockarray[i]), NULL);
+    CRYPTO_set_id_callback((unsigned long (*)())thread_id);
+    CRYPTO_set_locking_callback((void (*)())lock_callback);
+    #endif
+  }
+  else if (!strncasecmp(cvid->ssl_version, "nss", 3))
+  {
+    // TODO re-initialize NSS in some awesome way that makes it work after a fork
+  }
+}
+
+int cloudfs_object_read_fp(const char *path, FILE *fp)
 {
   fflush(fp);
   rewind(fp);
@@ -227,7 +244,7 @@ int object_read_fp(const char *path, FILE *fp)
   return (response >= 200 && response < 300);
 }
 
-int object_write_fp(const char *path, FILE *fp)
+int cloudfs_object_write_fp(const char *path, FILE *fp)
 {
   char *encoded = curl_escape(path, 0);
   int response = send_request("GET", encoded, fp, NULL, NULL);
@@ -239,7 +256,7 @@ int object_write_fp(const char *path, FILE *fp)
   return 0;
 }
 
-int object_truncate(const char *path, off_t size)
+int cloudfs_object_truncate(const char *path, off_t size)
 {
   char *encoded = curl_escape(path, 0);
   int response;
@@ -257,7 +274,7 @@ int object_truncate(const char *path, off_t size)
   return (response >= 200 && response < 300);
 }
 
-int list_directory(const char *path, dir_entry **dir_list)
+int cloudfs_list_directory(const char *path, dir_entry **dir_list)
 {
   char container[MAX_PATH_SIZE * 3] = "";
   char object[MAX_PATH_SIZE] = "";
@@ -362,7 +379,7 @@ int list_directory(const char *path, dir_entry **dir_list)
         {
           if (!strncasecmp(de->name, last_subdir, sizeof(last_subdir)))
           {
-            free_dir_list(de);
+            cloudfs_free_dir_list(de);
             continue;
           }
           strncpy(last_subdir, de->name, sizeof(last_subdir));
@@ -385,7 +402,7 @@ int list_directory(const char *path, dir_entry **dir_list)
   return retval;
 }
 
-void free_dir_list(dir_entry *dir_list)
+void cloudfs_free_dir_list(dir_entry *dir_list)
 {
   while (dir_list)
   {
@@ -398,7 +415,7 @@ void free_dir_list(dir_entry *dir_list)
   }
 }
 
-int delete_object(const char *path)
+int cloudfs_delete_object(const char *path)
 {
   char *encoded = curl_escape(path, 0);
   int response = send_request("DELETE", encoded, NULL, NULL, NULL);
@@ -406,7 +423,7 @@ int delete_object(const char *path)
   return (response >= 200 && response < 300);
 }
 
-int copy_object(const char *src, const char *dst)
+int cloudfs_copy_object(const char *src, const char *dst)
 {
   char *dst_encoded = curl_escape(dst, 0);
   curl_slist *headers = NULL;
@@ -418,12 +435,19 @@ int copy_object(const char *src, const char *dst)
   return (response >= 200 && response < 300);
 }
 
-int create_directory(const char *path)
+int cloudfs_create_directory(const char *path)
 {
   char *encoded = curl_escape(path, 0);
   int response = send_request("MKDIR", encoded, NULL, NULL, NULL);
   curl_free(encoded);
   return (response >= 200 && response < 300);
+}
+
+off_t cloudfs_file_size(int fd)
+{
+  struct stat buf;
+  fstat(fd, &buf);
+  return buf.st_size;
 }
 
 void cloudfs_debug(int dbg)
@@ -434,13 +458,6 @@ void cloudfs_debug(int dbg)
 void cloudfs_verify_ssl(int vrfy)
 {
   verify_ssl = vrfy;
-}
-
-off_t file_size(int fd)
-{
-  struct stat buf;
-  fstat(fd, &buf);
-  return buf.st_size;
 }
 
 static struct {
@@ -461,7 +478,6 @@ void cloudfs_set_credentials(char *username, char *tenant, char *password, char 
 
 int cloudfs_connect()
 {
-
   long response = -1;
 
   xmlNode *top_node = NULL, *service_node = NULL, *endpoint_node = NULL;
@@ -596,23 +612,6 @@ int cloudfs_connect()
     rewrite_url_snet(storage_url);
   pthread_mutex_unlock(&pool_mut);
   return (response >= 200 && response < 300 && storage_token[0] && storage_url[0]);
-}
-
-size_t header_dispatch(void *ptr, size_t size, size_t nmemb, void *stream)
-{
-  char *header = (char *)alloca(size * nmemb + 1);
-  char *head = (char *)alloca(size * nmemb + 1);
-  char *value = (char *)alloca(size * nmemb + 1);
-  memcpy(header, (char *)ptr, size * nmemb);
-  header[size * nmemb] = '\0';
-  if (sscanf(header, "%[^:]: %[^\r\n]", head, value) == 2)
-  {
-    if (!strncasecmp(head, "x-auth-token", size * nmemb))
-      strncpy(storage_token, value, sizeof(storage_token));
-    if (!strncasecmp(head, "x-storage-url", size * nmemb))
-      strncpy(storage_url, value, sizeof(storage_url));
-  }
-  return size * nmemb;
 }
 
 void debugf(char *fmt, ...)

@@ -71,15 +71,15 @@ static int caching_list_directory(const char *path, dir_entry **list)
       break;
   if (!cw)
   {
-    if (!list_directory(path, list))
+    if (!cloudfs_list_directory(path, list))
       return  0;
     cw = new_cache(path);
   }
   else if (cache_timeout > 0 && (time(NULL) - cw->cached > cache_timeout))
   {
-    if (!list_directory(path, list))
+    if (!cloudfs_list_directory(path, list))
       return  0;
-    free_dir_list(cw->entries);
+    cloudfs_free_dir_list(cw->entries);
     cw->cached = time(NULL);
   }
   else
@@ -143,7 +143,7 @@ static void dir_decache(const char *path)
         cw->prev->next = cw->next;
       if (cw->next)
         cw->next->prev = cw->prev;
-      free_dir_list(cw->entries);
+      cloudfs_free_dir_list(cw->entries);
       free(cw->path);
       free(cw);
     }
@@ -154,7 +154,7 @@ static void dir_decache(const char *path)
         de = cw->entries;
         cw->entries = de->next;
         de->next = NULL;
-        free_dir_list(de);
+        cloudfs_free_dir_list(de);
       }
       else for (de = cw->entries; de->next; de = de->next)
       {
@@ -163,7 +163,7 @@ static void dir_decache(const char *path)
           tmpde = de->next;
           de->next = de->next->next;
           tmpde->next = NULL;
-          free_dir_list(tmpde);
+          cloudfs_free_dir_list(tmpde);
           break;
         }
       }
@@ -223,7 +223,7 @@ static int cfs_fgetattr(const char *path, struct stat *stbuf, struct fuse_file_i
   openfile *of = (openfile *)(uintptr_t)info->fh;
   if (of)
   {
-    stbuf->st_size = file_size(of->fd);
+    stbuf->st_size = cloudfs_file_size(of->fd);
     stbuf->st_mode = S_IFREG | 0666;
     stbuf->st_nlink = 1;
     return 0;
@@ -245,7 +245,7 @@ static int cfs_readdir(const char *path, void *buf, fuse_fill_dir_t filldir, off
 
 static int cfs_mkdir(const char *path, mode_t mode)
 {
-  if (create_directory(path))
+  if (cloudfs_create_directory(path))
   {
     update_dir_cache(path, 0, 1);
     return 0;
@@ -272,7 +272,7 @@ static int cfs_open(const char *path, struct fuse_file_info *info)
   dir_entry *de = path_info(path);
   if (!(info->flags & O_WRONLY))
   {
-    if (!object_write_fp(path, temp_file))
+    if (!cloudfs_object_write_fp(path, temp_file))
     {
       fclose(temp_file);
       return -ENOENT;
@@ -298,12 +298,12 @@ static int cfs_flush(const char *path, struct fuse_file_info *info)
   openfile *of = (openfile *)(uintptr_t)info->fh;
   if (of)
   {
-    update_dir_cache(path, file_size(of->fd), 0);
+    update_dir_cache(path, cloudfs_file_size(of->fd), 0);
     if (of->flags & O_RDWR || of->flags & O_WRONLY)
     {
       FILE *fp = fdopen(dup(of->fd), "r");
       rewind(fp);
-      if (!object_read_fp(path, fp))
+      if (!cloudfs_object_read_fp(path, fp))
       {
         fclose(fp);
         return -ENOENT;
@@ -322,7 +322,7 @@ static int cfs_release(const char *path, struct fuse_file_info *info)
 
 static int cfs_rmdir(const char *path)
 {
-  if (delete_object(path))
+  if (cloudfs_delete_object(path))
   {
     dir_decache(path);
     return 0;
@@ -348,7 +348,7 @@ static int cfs_write(const char *path, const char *buf, size_t length, off_t off
 
 static int cfs_unlink(const char *path)
 {
-  if (delete_object(path))
+  if (cloudfs_delete_object(path))
   {
     dir_decache(path);
     return 0;
@@ -363,7 +363,7 @@ static int cfs_fsync(const char *path, int idunno, struct fuse_file_info *info)
 
 static int cfs_truncate(const char *path, off_t size)
 {
-  object_truncate(path, size);
+  cloudfs_object_truncate(path, size);
   return 0;
 }
 
@@ -398,7 +398,7 @@ static int cfs_rename(const char *src, const char *dst)
       return -ENOENT;
   if (src_de->isdir)
     return -EISDIR;
-  if (copy_object(src, dst))
+  if (cloudfs_copy_object(src, dst))
   {
     /* FIXME this isn't quite right as doesn't preserve last modified */
     update_dir_cache(dst, src_de->size, 0);
