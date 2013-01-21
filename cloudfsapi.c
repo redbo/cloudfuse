@@ -25,6 +25,7 @@ static CURL *curl_pool[1024];
 static int curl_pool_count = 0;
 static int debug = 0;
 static int verify_ssl = 1;
+static int no_handle_reuse = 0;
 
 #ifdef HAVE_OPENSSL
 #include <openssl/crypto.h>
@@ -49,6 +50,10 @@ void cloudfs_init()
   curl_global_init(CURL_GLOBAL_ALL);
   pthread_mutex_init(&pool_mut, NULL);
   curl_version_info_data *cvid = curl_version_info(CURLVERSION_NOW);
+
+  // CentOS/RHEL 5 get stupid mode, because they have a broken libcurl
+  no_handle_reuse = (cvid->version_num == 462597);
+
   if (!strncasecmp(cvid->ssl_version, "openssl", 7))
   {
     #ifdef HAVE_OPENSSL
@@ -63,7 +68,7 @@ void cloudfs_init()
   }
   if (!strncasecmp(cvid->ssl_version, "nss", 3))
   {
-    // re-initialize NSS
+    // TODO re-initialize NSS in some awesome way that makes it work after a fork
   }
 }
 
@@ -97,9 +102,14 @@ static CURL *get_connection(const char *path)
 
 static void return_connection(CURL *curl)
 {
-  pthread_mutex_lock(&pool_mut);
-  curl_pool[curl_pool_count++] = curl;
-  pthread_mutex_unlock(&pool_mut);
+  if (no_handle_reuse)
+    curl_easy_cleanup(curl);
+  else
+  {
+    pthread_mutex_lock(&pool_mut);
+    curl_pool[curl_pool_count++] = curl;
+    pthread_mutex_unlock(&pool_mut);
+  }
 }
 
 void add_header(curl_slist **headers, const char *name, const char *value)
