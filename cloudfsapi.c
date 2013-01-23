@@ -25,7 +25,7 @@ static CURL *curl_pool[1024];
 static int curl_pool_count = 0;
 static int debug = 0;
 static int verify_ssl = 1;
-static int no_handle_reuse = 0;
+static int rhel_5_mode = 0;
 
 #ifdef HAVE_OPENSSL
 #include <openssl/crypto.h>
@@ -112,6 +112,8 @@ static int send_request(char *method, const char *path, FILE *fp, xmlParserCtxtP
   for (tries = 0; tries < REQUEST_RETRIES; tries++)
   {
     CURL *curl = get_connection(path);
+    if (rhel_5_mode)
+      curl_easy_setopt(curl, CURLOPT_CAINFO, "/etc/pki/tls/certs/ca-bundle.crt");
     curl_slist *headers = NULL;
     curl_easy_setopt(curl, CURLOPT_URL, url);
     curl_easy_setopt(curl, CURLOPT_HEADER, 0);
@@ -167,13 +169,8 @@ static int send_request(char *method, const char *path, FILE *fp, xmlParserCtxtP
     curl_easy_perform(curl);
     curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response);
     curl_slist_free_all(headers);
-    if (no_handle_reuse)
-      curl_easy_cleanup(curl);
-    else
-    {
-      curl_easy_reset(curl);
-      return_connection(curl);
-    }
+    curl_easy_reset(curl);
+    return_connection(curl);
     if (response >= 200 && response < 400)
       return response;
     sleep(8 << tries); // backoff
@@ -214,7 +211,7 @@ void cloudfs_init()
   curl_version_info_data *cvid = curl_version_info(CURLVERSION_NOW);
 
   // CentOS/RHEL 5 get stupid mode, because they have a broken libcurl
-  no_handle_reuse = (cvid->version_num == 462597);
+  rhel_5_mode = (cvid->version_num == 462597);
 
   if (!strncasecmp(cvid->ssl_version, "openssl", 7))
   {
