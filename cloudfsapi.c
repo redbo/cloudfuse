@@ -467,18 +467,16 @@ void cloudfs_verify_ssl(int vrfy)
 
 static struct {
   char username[MAX_HEADER_SIZE], password[MAX_HEADER_SIZE],
-       tenant[MAX_HEADER_SIZE],
-       authurl[MAX_URL_SIZE], use_snet, use_openstack;
+       tenant[MAX_HEADER_SIZE], authurl[MAX_URL_SIZE], use_snet;
 } reconnect_args;
 
-void cloudfs_set_credentials(char *username, char *tenant, char *password, char *authurl, int use_snet, int use_openstack)
+void cloudfs_set_credentials(char *username, char *tenant, char *password, char *authurl, int use_snet)
 {
   strncpy(reconnect_args.username, username, sizeof(reconnect_args.username));
   strncpy(reconnect_args.tenant, tenant, sizeof(reconnect_args.tenant));
   strncpy(reconnect_args.password, password, sizeof(reconnect_args.password));
   strncpy(reconnect_args.authurl, authurl, sizeof(reconnect_args.authurl));
   reconnect_args.use_snet = use_snet;
-  reconnect_args.use_openstack = use_openstack;
 }
 
 int cloudfs_connect()
@@ -489,7 +487,7 @@ int cloudfs_connect()
   xmlParserCtxtPtr xmlctx = NULL;
 
   char *postdata;
-  if (reconnect_args.use_openstack)
+  if (reconnect_args.tenant[0])
   {
       int count = asprintf(&postdata,
          "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
@@ -511,7 +509,7 @@ int cloudfs_connect()
   CURL *curl = curl_easy_init();
 
   curl_slist *headers = NULL;
-  if (reconnect_args.use_openstack)
+  if (reconnect_args.tenant[0])
   {
     add_header(&headers, "Content-Type", "application/xml");
     add_header(&headers, "Accept", "application/xml");
@@ -547,7 +545,7 @@ int cloudfs_connect()
   curl_slist_free_all(headers);
   curl_easy_cleanup(curl);
 
-  if (reconnect_args.use_openstack)
+  if (reconnect_args.tenant[0])
   {
     free(postdata);
     xmlParseChunk(xmlctx, "", 0, 1);
