@@ -17,6 +17,7 @@
 #include "config.h"
 
 #define RHEL5_LIBCURL_VERSION 462597
+#define RHEL5_CERTIFICATE_FILE "/etc/pki/tls/certs/ca-bundle.crt"
 
 #define REQUEST_RETRIES 4
 
@@ -115,7 +116,7 @@ static int send_request(char *method, const char *path, FILE *fp, xmlParserCtxtP
   {
     CURL *curl = get_connection(path);
     if (rhel5_mode)
-      curl_easy_setopt(curl, CURLOPT_CAINFO, "/etc/pki/tls/certs/ca-bundle.crt");
+      curl_easy_setopt(curl, CURLOPT_CAINFO, RHEL5_CERTIFICATE_FILE);
     curl_slist *headers = NULL;
     curl_easy_setopt(curl, CURLOPT_URL, url);
     curl_easy_setopt(curl, CURLOPT_HEADER, 0);
