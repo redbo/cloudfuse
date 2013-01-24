@@ -409,13 +409,7 @@ static int cfs_rename(const char *src, const char *dst)
 
 static void *cfs_init(struct fuse_conn_info *conn)
 {
-  cloudfs_init();
   signal(SIGPIPE, SIG_IGN);
-  if (!cloudfs_connect())
-  {
-    debugf("Failed to authenticate.");
-    abort();
-  }
   return NULL;
 }
 
@@ -502,11 +496,18 @@ int main(int argc, char **argv)
     return 1;
   }
 
+  cloudfs_init();
+
   cloudfs_verify_ssl(!strcasecmp(options.verify_ssl, "true"));
 
   cloudfs_set_credentials(options.username, options.tenant, options.api_key, options.authurl,
         !strcasecmp(options.use_snet, "true"),
         !strcasecmp(options.use_openstack, "true"));
+  if (!cloudfs_connect())
+  {
+    fprintf(stderr, "Failed to authenticate.\n");
+    return 1;
+  }
 
   #ifndef HAVE_OPENSSL
   #warning Compiling without libssl, will run single-threaded.

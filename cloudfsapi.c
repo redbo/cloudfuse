@@ -227,7 +227,8 @@ void cloudfs_init()
   }
   else if (!strncasecmp(cvid->ssl_version, "nss", 3))
   {
-    // TODO re-initialize NSS in some awesome way that makes it work after a fork
+    // allow https to continue working after forking (for RHEL/CentOS 6)
+    setenv("NSS_STRICT_NOFORK", "DISABLED", 1);
   }
 }
 
