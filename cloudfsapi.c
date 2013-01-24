@@ -16,6 +16,8 @@
 #include "cloudfsapi.h"
 #include "config.h"
 
+#define RHEL5_LIBCURL_VERSION 462597
+
 #define REQUEST_RETRIES 4
 
 static char storage_url[MAX_URL_SIZE];
@@ -25,7 +27,7 @@ static CURL *curl_pool[1024];
 static int curl_pool_count = 0;
 static int debug = 0;
 static int verify_ssl = 1;
-static int rhel_5_mode = 0;
+static int rhel5_mode = 0;
 
 #ifdef HAVE_OPENSSL
 #include <openssl/crypto.h>
@@ -112,7 +114,7 @@ static int send_request(char *method, const char *path, FILE *fp, xmlParserCtxtP
   for (tries = 0; tries < REQUEST_RETRIES; tries++)
   {
     CURL *curl = get_connection(path);
-    if (rhel_5_mode)
+    if (rhel5_mode)
       curl_easy_setopt(curl, CURLOPT_CAINFO, "/etc/pki/tls/certs/ca-bundle.crt");
     curl_slist *headers = NULL;
     curl_easy_setopt(curl, CURLOPT_URL, url);
@@ -211,7 +213,11 @@ void cloudfs_init()
   curl_version_info_data *cvid = curl_version_info(CURLVERSION_NOW);
 
   // CentOS/RHEL 5 get stupid mode, because they have a broken libcurl
-  rhel_5_mode = (cvid->version_num == 462597);
+  if (cvid->version_num == RHEL5_LIBCURL_VERSION)
+  {
+    debugf("RHEL5 mode enabled.");
+    rhel5_mode = 1;
+  }
 
   if (!strncasecmp(cvid->ssl_version, "openssl", 7))
   {
