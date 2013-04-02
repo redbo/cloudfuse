@@ -31,7 +31,7 @@ int cloudfs_object_read_fp(const char *path, FILE *fp);
 int cloudfs_object_write_fp(const char *path, FILE *fp);
 int cloudfs_list_directory(const char *path, dir_entry **);
 int cloudfs_delete_object(const char *path);
-int cloudfs_copy_object(const char *src, const char *dst);
+int cloudfs_copy_object(const char *src, const char *dst, const char *content_type);
 int cloudfs_create_directory(const char *label);
 int cloudfs_object_truncate(const char *path, off_t size);
 off_t cloudfs_file_size(int fd);

@@ -14,9 +14,9 @@
 #include <signal.h>
 #include <stdint.h>
 #include <stddef.h>
+#include "mime_types.c"
 #include "cloudfsapi.h"
 #include "config.h"
-
 
 #define OPTION_SIZE 1024
 
@@ -185,6 +185,24 @@ static dir_entry *path_info(const char *path)
       return tmp;
   }
   return NULL;
+}
+
+const char *get_filename_ext(const char *filename) {
+  const char *dot = strrchr(filename, '.');
+  if(!dot || dot == filename) return "";
+  return dot + 1;
+}
+
+const char *get_mime_type(const char *full_path)
+{
+  const char *ext = get_filename_ext(full_path);
+  int i;
+  for(i = 0; i < 1634; i = i + 2){
+    if(strcmp(mime_types[i], ext) == 0){
+      return mime_types[i + 1];
+    }
+  }
+  return "application/octet-stream";
 }
 
 static int cfs_getattr(const char *path, struct stat *stbuf)
@@ -398,7 +416,8 @@ static int cfs_rename(const char *src, const char *dst)
       return -ENOENT;
   if (src_de->isdir)
     return -EISDIR;
-  if (cloudfs_copy_object(src, dst))
+
+  if (cloudfs_copy_object(src, dst, get_mime_type(dst)))
   {
     /* FIXME this isn't quite right as doesn't preserve last modified */
     update_dir_cache(dst, src_de->size, 0);
@@ -460,6 +479,7 @@ int parse_option(void *data, const char *arg, int key, struct fuse_args *outargs
 
 int main(int argc, char **argv)
 {
+
   char settings_filename[MAX_PATH_SIZE] = "";
   FILE *settings;
   struct fuse_args args = FUSE_ARGS_INIT(argc, argv);

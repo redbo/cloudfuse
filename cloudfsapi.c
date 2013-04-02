@@ -428,12 +428,13 @@ int cloudfs_delete_object(const char *path)
   return (response >= 200 && response < 300);
 }
 
-int cloudfs_copy_object(const char *src, const char *dst)
+int cloudfs_copy_object(const char *src, const char *dst, const char *content_type)
 {
   char *dst_encoded = curl_escape(dst, 0);
   curl_slist *headers = NULL;
   add_header(&headers, "X-Copy-From", src);
   add_header(&headers, "Content-Length", "0");
+  add_header(&headers, "Content-Type", content_type);
   int response = send_request("PUT", dst_encoded, NULL, NULL, headers);
   curl_free(dst_encoded);
   curl_slist_free_all(headers);
