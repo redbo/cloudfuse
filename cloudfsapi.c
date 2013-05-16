@@ -338,6 +338,7 @@ int cloudfs_list_directory(const char *path, dir_entry **dir_list)
         entry_count++;
 
         dir_entry *de = (dir_entry *)malloc(sizeof(dir_entry));
+        de->name = NULL;
         de->next = NULL;
         de->size = 0;
         de->last_modified = time(NULL);
@@ -377,6 +378,27 @@ int cloudfs_list_directory(const char *path, dir_entry **dir_list)
             de->last_modified = mktime(&last_modified);
           }
         }
+
+        // de->name still can be empty
+        // ... check all properties of subdir | object
+        // It can be in form <subdir name="somedir/" /> with no children
+        xmlAttrPtr attr;
+        for (attr = onode->properties; attr; attr = attr->next)
+        {
+          if (!strcasecmp((const char *)attr->name, "name"))
+          {
+            de->name = strdup(attr->children->content);
+
+            // Remove trailing slash
+            char *slash = strrchr(de->name, '/');
+            if (slash && (0 == *(slash + 1)))
+              *slash = 0;
+
+            if (asprintf(&(de->full_name), "%s/%s", path, de->name) < 0)
+              de->full_name = NULL;
+          }
+        }
+
         de->isdir = de->content_type &&
             ((strstr(de->content_type, "application/folder") != NULL) ||
              (strstr(de->content_type, "application/directory") != NULL));
