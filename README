@@ -35,20 +35,24 @@ BUILDING:
 
 USE:
 
-    Your Rackspace Cloud username and API key can be placed in a file
-    named $HOME/.cloudfuse:
-        username=[Account username]
-        api_key=[API key (or password for Keystone API)]
-
-    The following settings are optional:
-        authurl=[Authentication url - connect to non-Rackspace Swift]
-        tenant=[Tenant for authentication with Keystone, enables Auth 2.0 API]
-        password=[Alias for api_key, if using Keystone API]
+    The following settings can be defined in the file ~/.cloudfuse:
+        username=[Account username for authentication, required]
+        api_key=[API key for authentication with Rackspace]
+        tenant=[Tenant for authentication with Openstack]
+        password=[Authentication password with Openstack]
+        authurl=[Authentication url, defaults to Rackspace's cloud]
+        region=[Regional endpoint to use]
         use_snet=[True to use Rackspace ServiceNet for connections]
         cache_timeout=[Seconds for directory caching, default 600]
         verify_ssl=[False to disable SSL cert verification]
 
-    These can also be specified as mount options on the command line:
+    For authenticating with Rackspace's cloud, at minimum "username" and
+    "api_key" must be set.
+
+    For authenticating with Keystone, "username", "password", "tenant", and
+    "authurl" should probably be defined.
+
+    These settings can also be specified as mount options on the command line:
         cloudfuse -o username=redbo,api_key=713aa... mountpoint/
 
     Or as mount options in /etc/fstab:
@@ -60,13 +64,22 @@ USE:
 
 EXAMPLE:
 
-    A typical .cloudfuse configuration file for use with OpenStack Essex:
+    A typical ~/.cloudfuse configuration file for use with Rackspace:
+        username=demo
+        api_key=643afce8b5187d40ba15e4827384fc5b
+        
+        # if no region is selected, it will use your default region.
+        #   region=DFW
+        
+        # if connecting within a Rackspace datacenter, ServiceNet can be
+        # used to avoid bandwidth charges.
+        #   use_snet=true
 
-    username=demo
-    tenant=demo
-    api_key=supersecret
-    authurl=http://10.10.0.1:5000/v2.0/tokens
-    use_openstack=true
+    A typical ~/.cloudfuse configuration file for use with OpenStack:
+        username=demo
+        tenant=demo
+        password=supersecret
+        authurl=http://10.10.0.1:5000/v2.0
 
 
 BUGS/SHORTCOMINGS:

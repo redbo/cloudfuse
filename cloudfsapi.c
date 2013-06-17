@@ -13,6 +13,8 @@
 #include <sys/types.h>
 #include <sys/time.h>
 #include <libxml/tree.h>
+#include <libxml/xpath.h>
+#include <libxml/xpathInternals.h>
 #include "cloudfsapi.h"
 #include "config.h"
 
@@ -82,14 +84,16 @@ static void return_connection(CURL *curl)
   pthread_mutex_unlock(&pool_mut);
 }
 
-static void add_header(curl_slist **headers, const char *name, const char *value)
+static void add_header(curl_slist **headers, const char *name,
+                       const char *value)
 {
   char x_header[MAX_HEADER_SIZE];
   snprintf(x_header, sizeof(x_header), "%s: %s", name, value);
   *headers = curl_slist_append(*headers, x_header);
 }
 
-static int send_request(char *method, const char *path, FILE *fp, xmlParserCtxtPtr xmlctx, curl_slist *extra_headers)
+static int send_request(char *method, const char *path, FILE *fp,
+                        xmlParserCtxtPtr xmlctx, curl_slist *extra_headers)
 {
   char url[MAX_URL_SIZE];
   char *slash;
@@ -209,6 +213,7 @@ static size_t header_dispatch(void *ptr, size_t size, size_t nmemb, void *stream
 void cloudfs_init()
 {
   LIBXML_TEST_VERSION
+  xmlXPathInit();
   curl_global_init(CURL_GLOBAL_ALL);
   pthread_mutex_init(&pool_mut, NULL);
   curl_version_info_data *cvid = curl_version_info(CURLVERSION_NOW);
@@ -467,50 +472,68 @@ void cloudfs_verify_ssl(int vrfy)
 
 static struct {
   char username[MAX_HEADER_SIZE], password[MAX_HEADER_SIZE],
-       tenant[MAX_HEADER_SIZE], authurl[MAX_URL_SIZE], use_snet;
+      tenant[MAX_HEADER_SIZE], authurl[MAX_URL_SIZE], region[MAX_URL_SIZE],
+      use_snet, auth_version;
 } reconnect_args;
 
-void cloudfs_set_credentials(char *username, char *tenant, char *password, char *authurl, int use_snet)
+void cloudfs_set_credentials(char *username, char *tenant, char *password,
+                             char *authurl, char *region, int use_snet)
 {
   strncpy(reconnect_args.username, username, sizeof(reconnect_args.username));
   strncpy(reconnect_args.tenant, tenant, sizeof(reconnect_args.tenant));
   strncpy(reconnect_args.password, password, sizeof(reconnect_args.password));
   strncpy(reconnect_args.authurl, authurl, sizeof(reconnect_args.authurl));
+  strncpy(reconnect_args.region, region, sizeof(reconnect_args.region));
+  if (strstr(authurl, "v2.0"))
+  {
+    reconnect_args.auth_version = 2;
+    if (!strcmp(authurl + strlen(authurl) - 5, "/v2.0"))
+      strcat(reconnect_args.authurl, "/tokens");
+    else if (!strcmp(authurl + strlen(authurl) - 6, "/v2.0/"))
+      strcat(reconnect_args.authurl, "tokens");
+  }
+  else
+    reconnect_args.auth_version = 1;
   reconnect_args.use_snet = use_snet;
 }
 
 int cloudfs_connect()
 {
   long response = -1;
-
+  curl_slist *headers = NULL;
+  CURL *curl = curl_easy_init();
+  char postdata[8192] = "";
   xmlNode *top_node = NULL, *service_node = NULL, *endpoint_node = NULL;
   xmlParserCtxtPtr xmlctx = NULL;
 
-  char *postdata;
-  if (reconnect_args.tenant[0])
-  {
-      int count = asprintf(&postdata,
-         "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
-         "<auth xmlns=\"http://docs.openstack.org/identity/api/v2.0\" tenantName=\"%s\">"
-         "<passwordCredentials username=\"%s\" password=\"%s\"/>"
-         "</auth>",
-         reconnect_args.tenant, reconnect_args.username, reconnect_args.password);
-      if (count < 0)
-      {
-        debugf("Unable to asprintf");
-        abort();
-      }
-  }
-
   pthread_mutex_lock(&pool_mut);
-  debugf("Authenticating...");
+
   storage_token[0] = storage_url[0] = '\0';
 
-  CURL *curl = curl_easy_init();
-
-  curl_slist *headers = NULL;
-  if (reconnect_args.tenant[0])
+  if (reconnect_args.auth_version == 2)
   {
+    if (reconnect_args.username[0] && reconnect_args.tenant[0] && reconnect_args.password[0])
+    {
+      snprintf(postdata, sizeof(postdata), "<?xml version=\"1.0\" encoding"
+          "=\"UTF-8\"?><auth xmlns=\"http://docs.openstack.org/identity/ap"
+          "i/v2.0\" tenantName=\"%s\"><passwordCredentials username=\"%s\""
+          " password=\"%s\"/></auth>", reconnect_args.tenant,
+          reconnect_args.username, reconnect_args.password);
+    }
+    else if (reconnect_args.username[0] && reconnect_args.password[0])
+    {
+      snprintf(postdata, sizeof(postdata), "<?xml version=\"1.0\" encoding"
+          "=\"UTF-8\"?><auth><apiKeyCredentials xmlns=\"http://docs.racksp"
+          "ace.com/identity/api/ext/RAX-KSKEY/v1.0\" username=\"%s\" apiKe"
+          "y=\"%s\"/></auth>", reconnect_args.username, reconnect_args.password);
+    }
+    else
+    {
+      debugf("Unable to determine auth scheme.");
+      abort();
+    }
+    debugf("%s", postdata);
+
     add_header(&headers, "Content-Type", "application/xml");
     add_header(&headers, "Accept", "application/xml");
 
@@ -526,12 +549,12 @@ int cloudfs_connect()
   {
     add_header(&headers, "X-Auth-User", reconnect_args.username);
     add_header(&headers, "X-Auth-Key", reconnect_args.password);
+    curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, &header_dispatch);
   }
 
   curl_easy_setopt(curl, CURLOPT_VERBOSE, debug);
   curl_easy_setopt(curl, CURLOPT_URL, reconnect_args.authurl);
   curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
-  curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, &header_dispatch);
   curl_easy_setopt(curl, CURLOPT_USERAGENT, USER_AGENT);
   curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1);
   curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, verify_ssl);
@@ -540,78 +563,78 @@ int cloudfs_connect()
   curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 10);
   curl_easy_setopt(curl, CURLOPT_FORBID_REUSE, 1);
 
+  debugf("Sending authentication request.");
   curl_easy_perform(curl);
   curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response);
   curl_slist_free_all(headers);
   curl_easy_cleanup(curl);
 
-  if (reconnect_args.tenant[0])
+  if (reconnect_args.auth_version == 2)
   {
-    free(postdata);
     xmlParseChunk(xmlctx, "", 0, 1);
     if (xmlctx->wellFormed && response >= 200 && response < 300)
     {
-      xmlNode *root_element = xmlDocGetRootElement(xmlctx->myDoc);
-      for (top_node = root_element->children; top_node; top_node = top_node->next)
+      xmlXPathContextPtr xpctx = xmlXPathNewContext(xmlctx->myDoc);
+      xmlXPathRegisterNs(xpctx, "id", "http://docs.openstack.org/identity/api/v2.0");
+      xmlXPathObjectPtr obj;
+
+      /* Determine default region if not configured */
+      if (!reconnect_args.region[0])
       {
-        if ((top_node->type == XML_ELEMENT_NODE) &&
-           (!strcasecmp((const char *)top_node->name, "serviceCatalog")))
+        obj = xmlXPathEval("/id:access/id:user", xpctx);
+        if (obj && obj->nodesetval && obj->nodesetval->nodeNr > 0)
         {
-          for (service_node = top_node->children; service_node; service_node = service_node->next)
-            if ((service_node->type == XML_ELEMENT_NODE) &&
-               (!strcasecmp((const char *)service_node->name, "service")))
-            {
-              xmlChar * serviceType = xmlGetProp(service_node, "type");
-              int isObjectStore = serviceType && !strcasecmp(serviceType, "object-store");
-              xmlFree(serviceType);
-
-              if (!isObjectStore) continue;
-
-              for (endpoint_node = service_node->children; endpoint_node; endpoint_node = endpoint_node->next)
-                if ((endpoint_node->type == XML_ELEMENT_NODE) &&
-                   (!strcasecmp((const char *)endpoint_node->name, "endpoint")))
-                {
-                  xmlChar * publicURL = xmlGetProp(endpoint_node, "publicURL");
-                  if (publicURL)
-                  {
-                    char copy = 1;
-                    if (storage_url[0])
-                    {
-                      if (strstr(publicURL, "cdn"))
-                      {
-                        copy = 0;
-                        debugf("Warning - found multiple object-store services; keeping %s, ignoring %s",
-                                                     storage_url, publicURL);
-                      }
-                      else
-                        debugf("Warning - found multiple object-store services; using %s instead of %s",
-                                                     publicURL, storage_url);
-                    }
-                    if (copy)
-                      strncpy(storage_url, publicURL, sizeof(storage_url));
-                  }
-                  xmlFree(publicURL);
-                }
-            }
-        }
-
-        if ((top_node->type == XML_ELEMENT_NODE) &&
-            (!strcasecmp((const char *)top_node->name, "token")))
-        {
-          xmlChar * tokenId = xmlGetProp(top_node, "id");
-          if (tokenId)
+          xmlChar *default_region = xmlGetProp(obj->nodesetval->nodeTab[0], "defaultRegion");
+          if (default_region && *default_region)
           {
-            if (storage_token[0])
-              debugf("Warning - found multiple authentication tokens.");
-            strncpy(storage_token, tokenId, sizeof(storage_token));
+            strncpy(reconnect_args.region, default_region, sizeof(reconnect_args.region));
+            xmlFree(default_region);
           }
-          xmlFree(tokenId);
         }
+        xmlXPathFreeNodeSetList(obj);
       }
+      debugf("Using region: %s", reconnect_args.region);
+
+      if (reconnect_args.region[0])
+      {
+        char path[1024];
+        snprintf(path, sizeof(path), "/id:access/id:serviceCatalog/id:service"
+            "[@type='object-store']/id:endpoint[@region='%s']",
+            reconnect_args.region);
+        obj = xmlXPathEval(path, xpctx);
+      }
+      else
+        obj = xmlXPathEval("/id:access/id:serviceCatalog/id:service"
+            "[@type='object-store']/id:endpoint", xpctx);
+      if (obj->nodesetval && obj->nodesetval->nodeNr > 0)
+      {
+        xmlChar *url;
+        if (reconnect_args.use_snet)
+          url = xmlGetProp(obj->nodesetval->nodeTab[0], "internalURL");
+        else
+          url = xmlGetProp(obj->nodesetval->nodeTab[0], "publicURL");
+        strncpy(storage_url, url, sizeof(storage_url));
+        xmlFree(url);
+      }
+      else
+        debugf("Unable to find endpoint");
+      xmlXPathFreeNodeSetList(obj);
+
+      obj = xmlXPathEval("/id:access/id:token", xpctx);
+      if (obj->nodesetval && obj->nodesetval->nodeNr > 0)
+      {
+        xmlChar *token_id = xmlGetProp(obj->nodesetval->nodeTab[0], "id");
+        strncpy(storage_token, token_id, sizeof(storage_token));
+        xmlFree(token_id);
+      }
+      xmlXPathFreeNodeSetList(obj);
+      xmlXPathFreeContext(xpctx);
+      debugf("storage_url: %s", storage_url);
+      debugf("storage_token: %s", storage_token);
     }
     xmlFreeParserCtxt(xmlctx);
   }
-  if (reconnect_args.use_snet && storage_url[0])
+  else if (reconnect_args.use_snet && storage_url[0])
     rewrite_url_snet(storage_url);
   pthread_mutex_unlock(&pool_mut);
   return (response >= 200 && response < 300 && storage_token[0] && storage_url[0]);

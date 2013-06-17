@@ -427,17 +427,19 @@ char *get_home_dir()
 static struct options {
     char username[OPTION_SIZE];
     char tenant[OPTION_SIZE];
-    char api_key[OPTION_SIZE];
+    char password[OPTION_SIZE];
     char cache_timeout[OPTION_SIZE];
     char authurl[OPTION_SIZE];
+    char region[OPTION_SIZE];
     char use_snet[OPTION_SIZE];
     char verify_ssl[OPTION_SIZE];
 } options = {
     .username = "",
-    .api_key = "",
+    .password = "",
     .tenant = "",
     .cache_timeout = "600",
-    .authurl = "https://auth.api.rackspacecloud.com/v1.0",
+    .authurl = "https://identity.api.rackspacecloud.com/v2.0/",
+    .region = "",
     .use_snet = "false",
     .verify_ssl = "true",
 };
@@ -446,10 +448,11 @@ int parse_option(void *data, const char *arg, int key, struct fuse_args *outargs
 {
   if (sscanf(arg, " username = %[^\r\n ]", options.username) ||
       sscanf(arg, " tenant = %[^\r\n ]", options.tenant) ||
-      sscanf(arg, " api_key = %[^\r\n ]", options.api_key) ||
-      sscanf(arg, " password = %[^\r\n ]", options.api_key) ||
+      sscanf(arg, " api_key = %[^\r\n ]", options.password) ||
+      sscanf(arg, " password = %[^\r\n ]", options.password) ||
       sscanf(arg, " cache_timeout = %[^\r\n ]", options.cache_timeout) ||
       sscanf(arg, " authurl = %[^\r\n ]", options.authurl) ||
+      sscanf(arg, " region = %[^\r\n ]", options.region) ||
       sscanf(arg, " use_snet = %[^\r\n ]", options.use_snet) ||
       sscanf(arg, " verify_ssl = %[^\r\n ]", options.verify_ssl))
     return 0;
@@ -477,7 +480,7 @@ int main(int argc, char **argv)
 
   cache_timeout = atoi(options.cache_timeout);
 
-  if (!*options.username || !*options.api_key)
+  if (!*options.username || !*options.password)
   {
     fprintf(stderr, "Unable to determine username and API key.\n\n");
     fprintf(stderr, "These can be set either as mount options or in"
@@ -486,8 +489,8 @@ int main(int argc, char **argv)
     fprintf(stderr, "  api_key=[API key (or password for Keystone API)]\n\n");
     fprintf(stderr, "The following settings are optional:\n\n");
     fprintf(stderr, "  authurl=[Authentication url - connect to non-Rackspace Swift]\n");
-    fprintf(stderr, "  tenant=[Tenant for authentication with Keystone, enables Auth 2.0 API]\n");
-    fprintf(stderr, "  password=[Alias for api_key, if using Keystone API]\n");
+    fprintf(stderr, "  tenant=[Tenant for authentication with Keystone]\n");
+    fprintf(stderr, "  password=[Password for authentication with Keystone]\n");
     fprintf(stderr, "  use_snet=[True to use Rackspace ServiceNet for connections]\n");
     fprintf(stderr, "  cache_timeout=[Seconds for directory caching, default 600]\n");
     fprintf(stderr, "  verify_ssl=[False to disable SSL cert verification]\n");
@@ -499,8 +502,9 @@ int main(int argc, char **argv)
 
   cloudfs_verify_ssl(!strcasecmp(options.verify_ssl, "true"));
 
-  cloudfs_set_credentials(options.username, options.tenant, options.api_key,
-        options.authurl, !strcasecmp(options.use_snet, "true"));
+  cloudfs_set_credentials(options.username, options.tenant, options.password,
+                          options.authurl, options.region,
+                          !strcasecmp(options.use_snet, "true"));
   if (!cloudfs_connect())
   {
     fprintf(stderr, "Failed to authenticate.\n");
