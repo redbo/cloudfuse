@@ -5,7 +5,7 @@
 #include <curl/easy.h>
 
 #define BUFFER_INITIAL_SIZE 4096
-#define MAX_HEADER_SIZE 4096
+#define MAX_HEADER_SIZE 8192
 #define MAX_PATH_SIZE (1024 + 256 + 3)
 #define MAX_URL_SIZE (MAX_PATH_SIZE * 3)
 #define USER_AGENT "CloudFuse"
