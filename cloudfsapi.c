@@ -284,7 +284,7 @@ int cloudfs_object_truncate(const char *path, off_t size)
   return (response >= 200 && response < 300);
 }
 
-int cloudfs_list_directory(const char *path, dir_entry **dir_list)
+int cloudfs_list_directory(const char *path, dir_entry **dir_list, const char *marker)
 {
   char container[MAX_PATH_SIZE * 3] = "";
   char object[MAX_PATH_SIZE] = "";
@@ -297,10 +297,11 @@ int cloudfs_list_directory(const char *path, dir_entry **dir_list)
   *dir_list = NULL;
   xmlNode *onode = NULL, *anode = NULL, *text_node = NULL;
   xmlParserCtxtPtr xmlctx = xmlCreatePushParserCtxt(NULL, NULL, "", 0, NULL);
+  char *encoded_marker = curl_escape(marker ? marker : "", 0);
   if (!strcmp(path, "") || !strcmp(path, "/"))
   {
     path = "";
-    strncpy(container, "/?format=xml", sizeof(container));
+    snprintf(container, sizeof(container), "/?format=xml&marker=", encoded_marker);  
   }
   else
   {
@@ -319,11 +320,13 @@ int cloudfs_list_directory(const char *path, dir_entry **dir_list)
       prefix_length++;
     }
 
-    snprintf(container, sizeof(container), "%s?format=xml&delimiter=/&prefix=%s%s",
-              encoded_container, encoded_object, trailing_slash);
+    snprintf(container, sizeof(container), "%1$s?format=xml&delimiter=/&prefix=%2$s%3$s&marker=%2$s%3$s%4$s",
+              encoded_container, encoded_object, trailing_slash, encoded_marker);
     curl_free(encoded_container);
     curl_free(encoded_object);
   }
+
+  curl_free(encoded_marker);
 
   response = send_request("GET", container, NULL, xmlctx, NULL);
   xmlParseChunk(xmlctx, "", 0, 1);
@@ -402,7 +405,23 @@ int cloudfs_list_directory(const char *path, dir_entry **dir_list)
         debugf("unknown element: %s", onode->name);
       }
     }
+
     retval = 1;
+
+    if (entry_count >= DEFAULT_OBJECTS_LIMIT)
+    {
+      dir_entry *dir_sublist;
+      debugf("subrequest with marker: %s", (*dir_list)->name);
+      retval = cloudfs_list_directory(path, &dir_sublist, (*dir_list)->name);
+      if (retval && dir_sublist)
+      {
+        dir_entry *de = dir_sublist;
+        while (dir_sublist->next)
+          dir_sublist = dir_sublist->next;
+        dir_sublist->next = *dir_list;
+        *dir_list = de;
+      }
+    }
   }
 
   debugf("entry count: %d", entry_count);
