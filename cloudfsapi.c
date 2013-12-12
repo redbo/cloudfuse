@@ -137,6 +137,15 @@ static int send_request(char *method, const char *path, FILE *fp,
       curl_easy_setopt(curl, CURLOPT_INFILESIZE, 0);
       add_header(&headers, "Content-Type", "application/directory");
     }
+    else if (!strcasecmp(method, "MKLINK") && fp)
+    {
+      rewind(fp);
+      curl_easy_setopt(curl, CURLOPT_UPLOAD, 1);
+      //curl_easy_setopt(curl, CURLOPT_INFILESIZE, 0);
+      curl_easy_setopt(curl, CURLOPT_INFILESIZE, cloudfs_file_size(fileno(fp)));
+      curl_easy_setopt(curl, CURLOPT_READDATA, fp);
+      add_header(&headers, "Content-Type", "application/link");
+    }
     else if (!strcasecmp(method, "PUT") && fp)
     {
       rewind(fp);
@@ -385,6 +394,8 @@ int cloudfs_list_directory(const char *path, dir_entry **dir_list)
         de->isdir = de->content_type &&
             ((strstr(de->content_type, "application/folder") != NULL) ||
              (strstr(de->content_type, "application/directory") != NULL));
+        de->islink = de->content_type &&
+            ((strstr(de->content_type, "application/link") != NULL));
         if (de->isdir)
         {
           if (!strncasecmp(de->name, last_subdir, sizeof(last_subdir)))
@@ -442,6 +453,19 @@ int cloudfs_copy_object(const char *src, const char *dst)
   int response = send_request("PUT", dst_encoded, NULL, NULL, headers);
   curl_free(dst_encoded);
   curl_slist_free_all(headers);
+  return (response >= 200 && response < 300);
+}
+
+int cloudfs_create_symlink(const char *src, const char *dst)
+{
+  char *dst_encoded = curl_escape(dst, 0);
+
+  FILE *lnk = tmpfile();
+  fwrite(src, strlen(src), 1, lnk);
+  fwrite("\0", 1, 1, lnk);
+  int response = send_request("MKLINK", dst_encoded, lnk, NULL, NULL);
+  curl_free(dst_encoded);
+  fclose(lnk);
   return (response >= 200 && response < 300);
 }
 
