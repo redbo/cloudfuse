@@ -311,7 +311,9 @@ int cloudfs_object_read_fp(const char *path, FILE *fp)
 
     if (remaining) {
 
-        fseek(fp, remaining, SEEK_END);
+        //fseek(fp, remaining, SEEK_END);
+	// this won't work multithreaded
+        fseek(fp, i * segment_size, SEEK_SET);
         sprintf(seg_path, "%s%08i", seg_base, full_segments);
         char *encoded = curl_escape(seg_path, 0);
         response = send_request_size("PUT", encoded, fp, NULL, NULL, remaining);
