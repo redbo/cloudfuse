@@ -24,14 +24,6 @@ typedef struct dir_entry
   struct dir_entry *next;
 } dir_entry;
 
-struct segment_info
-{
-    FILE *fp;
-    int part;
-    long size;
-    char *seg_base;
-};
-
 void cloudfs_init();
 void cloudfs_set_credentials(char *username, char *tenant, char *password,
                              char *authurl, char *region, int use_snet);
