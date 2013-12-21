@@ -31,6 +31,8 @@ static int curl_pool_count = 0;
 static int debug = 0;
 static int verify_ssl = 1;
 static int rhel5_mode = 0;
+static long segment_size = 1073741824;
+static long segment_above = 2147483648;
 
 #ifdef HAVE_OPENSSL
 #include <openssl/crypto.h>
@@ -92,8 +94,9 @@ static void add_header(curl_slist **headers, const char *name,
   *headers = curl_slist_append(*headers, x_header);
 }
 
-static int send_request(char *method, const char *path, FILE *fp,
-                        xmlParserCtxtPtr xmlctx, curl_slist *extra_headers)
+static int send_request_size(char *method, const char *path, FILE *fp,
+                        xmlParserCtxtPtr xmlctx, curl_slist *extra_headers,
+                        off_t file_size)
 {
   char url[MAX_URL_SIZE];
   char *slash;
@@ -142,15 +145,16 @@ static int send_request(char *method, const char *path, FILE *fp,
       rewind(fp);
       curl_easy_setopt(curl, CURLOPT_UPLOAD, 1);
       //curl_easy_setopt(curl, CURLOPT_INFILESIZE, 0);
-      curl_easy_setopt(curl, CURLOPT_INFILESIZE, cloudfs_file_size(fileno(fp)));
+      curl_easy_setopt(curl, CURLOPT_INFILESIZE, file_size);
       curl_easy_setopt(curl, CURLOPT_READDATA, fp);
       add_header(&headers, "Content-Type", "application/link");
     }
     else if (!strcasecmp(method, "PUT") && fp)
     {
-      rewind(fp);
+      // your zealotry will destroy us all!
+      //rewind(fp);
       curl_easy_setopt(curl, CURLOPT_UPLOAD, 1);
-      curl_easy_setopt(curl, CURLOPT_INFILESIZE, cloudfs_file_size(fileno(fp)));
+      curl_easy_setopt(curl, CURLOPT_INFILESIZE, file_size);
       curl_easy_setopt(curl, CURLOPT_READDATA, fp);
     }
     else if (!strcasecmp(method, "GET"))
@@ -196,6 +200,18 @@ static int send_request(char *method, const char *path, FILE *fp,
       xmlCtxtResetPush(xmlctx, NULL, 0, NULL, NULL);
   }
   return response;
+}
+
+static int send_request(char *method, const char *path, FILE *fp,
+                        xmlParserCtxtPtr xmlctx, curl_slist *extra_headers)
+{
+
+    long flen = 0;
+    if (fp)
+        flen = cloudfs_file_size(fileno(fp));
+
+    return send_request_size(method, path, fp, xmlctx, extra_headers, flen);
+
 }
 
 static size_t header_dispatch(void *ptr, size_t size, size_t nmemb, void *stream)
@@ -255,7 +271,66 @@ void cloudfs_init()
 
 int cloudfs_object_read_fp(const char *path, FILE *fp)
 {
+
+  long flen;
   fflush(fp);
+
+  // determine the size of the file and segment if it is above the threshhold
+  fseek(fp, 0, SEEK_END);
+  flen = ftell(fp);
+  if (flen >= segment_above) {
+    int i;
+    long remaining = flen % segment_size;
+    int full_segments = flen / segment_size;
+
+    char manifest[MAX_URL_SIZE];
+    char *meta_mtime = "1386971541.005863";
+
+    char seg_base[MAX_URL_SIZE];
+    char seg_path[MAX_URL_SIZE];
+    int response;
+
+    char *string = strdup(path);
+
+    sprintf(seg_base, "/%s", strsep(&string, "/"));
+    char *container = strsep(&string, "/");
+    char *object = strsep(&string, "/");
+    sprintf(manifest, "%s_segments/%s/%s/%ld/%ld/", container, object,
+            meta_mtime, flen, segment_size);
+
+    sprintf(seg_base, "%s/%s", seg_base, manifest);
+    free(string);
+
+    for (i = 0; i < full_segments; i++) {
+        fseek(fp, i * segment_size, SEEK_SET);
+        sprintf(seg_path, "%s%08i", seg_base, i);
+        char *encoded = curl_escape(seg_path, 0);
+        response = send_request_size("PUT", encoded, fp, NULL, NULL, segment_size);
+        curl_free(encoded);
+    }
+
+    if (remaining) {
+
+        fseek(fp, remaining, SEEK_END);
+        sprintf(seg_path, "%s%08i", seg_base, full_segments);
+        char *encoded = curl_escape(seg_path, 0);
+        response = send_request_size("PUT", encoded, fp, NULL, NULL, remaining);
+        curl_free(encoded);
+    }
+
+    char *encoded = curl_escape(path, 0);
+    curl_slist *headers = NULL;
+    add_header(&headers, "x-object-manifest", manifest);
+    add_header(&headers, "x-object-meta-mtime", meta_mtime);
+    add_header(&headers, "Content-Length", "0");
+    response = send_request_size("PUT", encoded, NULL, NULL, headers, 0);
+    curl_slist_free_all(headers);
+
+    curl_free(encoded);
+    return (response >= 200 && response < 300);
+
+  }
+
   rewind(fp);
   char *encoded = curl_escape(path, 0);
   int response = send_request("PUT", encoded, fp, NULL, NULL);
