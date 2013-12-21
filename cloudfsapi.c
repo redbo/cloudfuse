@@ -32,7 +32,9 @@ static int debug = 0;
 static int verify_ssl = 1;
 static int rhel5_mode = 0;
 static long segment_size = 1073741824;
+//static long segment_size = 1;
 static long segment_above = 2147483648;
+//static long segment_above = 1;
 
 #ifdef HAVE_OPENSSL
 #include <openssl/crypto.h>
@@ -269,6 +271,21 @@ void cloudfs_init()
   }
 }
 
+void *upload_segment(void *seginfo)
+{
+  char seg_path[MAX_URL_SIZE];
+  struct segment_info *info;
+  info = (struct segment_info *)seginfo;
+
+  fseek(info->fp, info->part * segment_size, SEEK_SET);
+
+  sprintf(seg_path, "%s%08i", info->seg_base, info->part);
+  char *encoded = curl_escape(seg_path, 0);
+  int response = send_request_size("PUT", encoded, info->fp, NULL, NULL, info->size);
+  curl_free(encoded);
+  pthread_exit(NULL);
+}
+
 int cloudfs_object_read_fp(const char *path, FILE *fp)
 {
 
@@ -287,7 +304,7 @@ int cloudfs_object_read_fp(const char *path, FILE *fp)
     char *meta_mtime = "1386971541.005863";
 
     char seg_base[MAX_URL_SIZE];
-    char seg_path[MAX_URL_SIZE];
+    char file_path[PATH_MAX];
     int response;
 
     char *string = strdup(path);
@@ -301,24 +318,37 @@ int cloudfs_object_read_fp(const char *path, FILE *fp)
     sprintf(seg_base, "%s/%s", seg_base, manifest);
     free(string);
 
+    struct segment_info *info = (struct segment_info *)
+            malloc(full_segments * sizeof(struct segment_info));
+
+    pthread_t *threads = (pthread_t *)malloc(full_segments * sizeof(pthread_t));
+    sprintf(file_path, "/proc/self/fd/%d", fileno(fp));
+
     for (i = 0; i < full_segments; i++) {
-        fseek(fp, i * segment_size, SEEK_SET);
-        sprintf(seg_path, "%s%08i", seg_base, i);
-        char *encoded = curl_escape(seg_path, 0);
-        response = send_request_size("PUT", encoded, fp, NULL, NULL, segment_size);
-        curl_free(encoded);
+        info[i].fp = fopen(file_path, "r");
+        info[i].part = i;
+        info[i].size = segment_size;
+        info[i].seg_base = seg_base;
+        pthread_create(&threads[i], NULL, upload_segment, (void *)&(info[i]));
     }
 
     if (remaining) {
-
-        //fseek(fp, remaining, SEEK_END);
-	// this won't work multithreaded
-        fseek(fp, i * segment_size, SEEK_SET);
-        sprintf(seg_path, "%s%08i", seg_base, full_segments);
-        char *encoded = curl_escape(seg_path, 0);
-        response = send_request_size("PUT", encoded, fp, NULL, NULL, remaining);
-        curl_free(encoded);
+        info[i].fp = fopen(file_path, "r");
+        info[i].part = i;
+        info[i].size = remaining;
+        info[i].seg_base = seg_base;
+        pthread_create(&threads[i], NULL, upload_segment, (void *)&(info[i]));
+        pthread_join(threads[i], NULL);
+        fclose(info[i].fp);
     }
+
+    for (i = 0; i < full_segments; i++) {
+        pthread_join(threads[i], NULL);
+        fclose(info[i].fp);
+    }
+
+    free(info);
+    free(threads);
 
     char *encoded = curl_escape(path, 0);
     curl_slist *headers = NULL;
