@@ -96,14 +96,6 @@ static void add_header(curl_slist **headers, const char *name,
   *headers = curl_slist_append(*headers, x_header);
 }
 
-static size_t read_callback(void *ptr, size_t size, size_t nmemb, void *userp)
-{
-    if (size * nmemb < 1)
-        return 0;
-    fprintf(stderr, "fp %d nmemb %d size %d \n\n", (FILE *)userp, nmemb, size);
-    return fread(ptr, 1, size, (FILE *)userp);
-}
-
 static int send_request_size(char *method, const char *path, FILE *fp,
                         xmlParserCtxtPtr xmlctx, curl_slist *extra_headers,
                         off_t file_size)
@@ -165,9 +157,7 @@ static int send_request_size(char *method, const char *path, FILE *fp,
       //rewind(fp);
       curl_easy_setopt(curl, CURLOPT_UPLOAD, 1);
       curl_easy_setopt(curl, CURLOPT_INFILESIZE, file_size);
-      //curl_easy_setopt(curl, CURLOPT_READFUNCTION, read_callback);
       curl_easy_setopt(curl, CURLOPT_READDATA, fp);
-      fprintf(stderr, "\n\nthe file size is %d and the fp is %d\n\n", file_size, fp);
     }
     else if (!strcasecmp(method, "GET"))
     {
@@ -281,8 +271,6 @@ void cloudfs_init()
   }
 }
 
-
-
 void *upload_segment(void *seginfo)
 {
   char seg_path[MAX_URL_SIZE];
@@ -290,11 +278,16 @@ void *upload_segment(void *seginfo)
   info = (struct segment_info *)seginfo;
 
   fseek(info->fp, info->part * segment_size, SEEK_SET);
-  fprintf(stderr, "now %d is at  %d\n\n", info->fp, ftell(info->fp));
 
-  sprintf(seg_path, "%s%08i", info->seg_base, info->part);
+  snprintf(seg_path, MAX_URL_SIZE, "%s%08i", info->seg_base, info->part);
   char *encoded = curl_escape(seg_path, 0);
-  int response = send_request_size("PUT", encoded, info->fp, NULL, NULL, info->size);
+  int response = send_request_size("PUT", encoded, info->fp, NULL, NULL,
+      info->size);
+
+  if (!(response >= 200 && response < 300))
+    fprintf(stderr, "Segment upload %s failed with response %d", seg_path,
+         response);
+
   curl_free(encoded);
   fclose(info->fp);
   pthread_exit(NULL);
@@ -316,6 +309,8 @@ int cloudfs_object_read_fp(const char *path, FILE *fp)
     int segments = full_segments + (remaining > 0);
 
     char manifest[MAX_URL_SIZE];
+
+    // TODO: actually set this to now
     char *meta_mtime = "1386971541.005863";
 
     char seg_base[MAX_URL_SIZE];
@@ -324,33 +319,35 @@ int cloudfs_object_read_fp(const char *path, FILE *fp)
 
     char *string = strdup(path);
 
-    sprintf(seg_base, "%s", strsep(&string, "/"));
+    snprintf(seg_base, MAX_URL_SIZE, "%s", strsep(&string, "/"));
     char *container = strsep(&string, "/");
     char *object = strsep(&string, "/");
-    sprintf(manifest, "%s_segments/%s/%s/%ld/%ld/", container, object,
-            meta_mtime, flen, segment_size);
 
-    sprintf(seg_base, "%s/%s", seg_base, manifest);
+    snprintf(manifest, MAX_URL_SIZE, "%s_segments/%s/%s/%ld/%ld/", container,
+        object, meta_mtime, flen, segment_size);
+
+    snprintf(seg_base, MAX_URL_SIZE, "%s/%s", seg_base, manifest);
+
     free(string);
 
     struct segment_info *info = (struct segment_info *)
             malloc(segments * sizeof(struct segment_info));
 
     pthread_t *threads = (pthread_t *)malloc(segments * sizeof(pthread_t));
-    sprintf(file_path, "/proc/self/fd/%d", fileno(fp));
+
+    //TODO: portability?
+    snprintf(file_path, PATH_MAX, "/proc/self/fd/%d", fileno(fp));
 
     for (i = 0; i < segments; i++) {
-        info[i].fp = fopen(file_path, "r");
-        info[i].part = i;
-        info[i].size = i < full_segments ? segment_size : remaining;
-        info[i].seg_base = seg_base;
-        fprintf(stderr, "i %d full_segments %d size %ld seg_base %s \n\n", i, full_segments, info[i].size, seg_base );
-        fprintf(stderr, "fp %d \n\n",  info[i].fp);
-        pthread_create(&threads[i], NULL, upload_segment, (void *)&(info[i]));
+      info[i].fp = fopen(file_path, "r");
+      info[i].part = i;
+      info[i].size = i < full_segments ? segment_size : remaining;
+      info[i].seg_base = seg_base;
+      pthread_create(&threads[i], NULL, upload_segment, (void *)&(info[i]));
     }
 
     for (i = 0; i < segments; i++) {
-        pthread_join(threads[i], NULL);
+      pthread_join(threads[i], NULL);
     }
 
     free(info);
