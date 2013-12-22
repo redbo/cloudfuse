@@ -4,6 +4,7 @@
 #include <stdarg.h>
 #include <stdlib.h>
 #include <sys/stat.h>
+#include <fcntl.h>
 #ifdef __linux__
 #include <alloca.h>
 #endif
@@ -31,6 +32,8 @@ static int curl_pool_count = 0;
 static int debug = 0;
 static int verify_ssl = 1;
 static int rhel5_mode = 0;
+static long segment_size = 1073741824;
+static long segment_above = 2147483648;
 
 #ifdef HAVE_OPENSSL
 #include <openssl/crypto.h>
@@ -92,8 +95,9 @@ static void add_header(curl_slist **headers, const char *name,
   *headers = curl_slist_append(*headers, x_header);
 }
 
-static int send_request(char *method, const char *path, FILE *fp,
-                        xmlParserCtxtPtr xmlctx, curl_slist *extra_headers)
+static int send_request_size(char *method, const char *path, FILE *fp,
+                        xmlParserCtxtPtr xmlctx, curl_slist *extra_headers,
+                        off_t file_size)
 {
   char url[MAX_URL_SIZE];
   char *slash;
@@ -137,11 +141,21 @@ static int send_request(char *method, const char *path, FILE *fp,
       curl_easy_setopt(curl, CURLOPT_INFILESIZE, 0);
       add_header(&headers, "Content-Type", "application/directory");
     }
-    else if (!strcasecmp(method, "PUT") && fp)
+    else if (!strcasecmp(method, "MKLINK") && fp)
     {
       rewind(fp);
       curl_easy_setopt(curl, CURLOPT_UPLOAD, 1);
-      curl_easy_setopt(curl, CURLOPT_INFILESIZE, cloudfs_file_size(fileno(fp)));
+      //curl_easy_setopt(curl, CURLOPT_INFILESIZE, 0);
+      curl_easy_setopt(curl, CURLOPT_INFILESIZE, file_size);
+      curl_easy_setopt(curl, CURLOPT_READDATA, fp);
+      add_header(&headers, "Content-Type", "application/link");
+    }
+    else if (!strcasecmp(method, "PUT") && fp)
+    {
+      // your zealotry will destroy us all!
+      //rewind(fp);
+      curl_easy_setopt(curl, CURLOPT_UPLOAD, 1);
+      curl_easy_setopt(curl, CURLOPT_INFILESIZE, file_size);
       curl_easy_setopt(curl, CURLOPT_READDATA, fp);
     }
     else if (!strcasecmp(method, "GET"))
@@ -187,6 +201,18 @@ static int send_request(char *method, const char *path, FILE *fp,
       xmlCtxtResetPush(xmlctx, NULL, 0, NULL, NULL);
   }
   return response;
+}
+
+static int send_request(char *method, const char *path, FILE *fp,
+                        xmlParserCtxtPtr xmlctx, curl_slist *extra_headers)
+{
+
+    long flen = 0;
+    if (fp)
+        flen = cloudfs_file_size(fileno(fp));
+
+    return send_request_size(method, path, fp, xmlctx, extra_headers, flen);
+
 }
 
 static size_t header_dispatch(void *ptr, size_t size, size_t nmemb, void *stream)
@@ -244,9 +270,103 @@ void cloudfs_init()
   }
 }
 
+void *upload_segment(void *seginfo)
+{
+  char seg_path[MAX_URL_SIZE];
+  struct segment_info *info;
+  info = (struct segment_info *)seginfo;
+
+  fseek(info->fp, info->part * segment_size, SEEK_SET);
+
+  snprintf(seg_path, MAX_URL_SIZE, "%s%08i", info->seg_base, info->part);
+  char *encoded = curl_escape(seg_path, 0);
+  int response = send_request_size("PUT", encoded, info->fp, NULL, NULL,
+      info->size);
+
+  if (!(response >= 200 && response < 300))
+    fprintf(stderr, "Segment upload %s failed with response %d", seg_path,
+         response);
+
+  curl_free(encoded);
+  fclose(info->fp);
+  pthread_exit(NULL);
+}
+
 int cloudfs_object_read_fp(const char *path, FILE *fp)
 {
+
+  long flen;
   fflush(fp);
+
+  // determine the size of the file and segment if it is above the threshhold
+  fseek(fp, 0, SEEK_END);
+  flen = ftell(fp);
+  if (flen >= segment_above) {
+    int i;
+    long remaining = flen % segment_size;
+    int full_segments = flen / segment_size;
+    int segments = full_segments + (remaining > 0);
+
+    char manifest[MAX_URL_SIZE];
+
+    // TODO: actually set this to now
+    char *meta_mtime = "1386971541.005863";
+
+    char seg_base[MAX_URL_SIZE];
+    char file_path[PATH_MAX];
+    int response;
+
+    char *string = strdup(path);
+
+    snprintf(seg_base, MAX_URL_SIZE, "%s", strsep(&string, "/"));
+    char *container = strsep(&string, "/");
+    char *object = strsep(&string, "/");
+
+    snprintf(manifest, MAX_URL_SIZE, "%s_segments/%s/%s/%ld/%ld/", container,
+        object, meta_mtime, flen, segment_size);
+
+    snprintf(seg_base, MAX_URL_SIZE, "%s/%s", seg_base, manifest);
+
+    free(string);
+
+    struct segment_info *info = (struct segment_info *)
+            malloc(segments * sizeof(struct segment_info));
+
+    pthread_t *threads = (pthread_t *)malloc(segments * sizeof(pthread_t));
+
+#ifdef __linux__
+    snprintf(file_path, PATH_MAX, "/proc/self/fd/%d", fileno(fp));
+#else
+    //TODO: I haven't actually tested this
+    if (fcntl(fileno(fp), F_GETPATH, file_path) == -1)
+      fprintf(stderr, "couldn't get the path name\n");
+#endif
+
+    for (i = 0; i < segments; i++) {
+      info[i].fp = fopen(file_path, "r");
+      info[i].part = i;
+      info[i].size = i < full_segments ? segment_size : remaining;
+      info[i].seg_base = seg_base;
+      pthread_create(&threads[i], NULL, upload_segment, (void *)&(info[i]));
+    }
+
+    for (i = 0; i < segments; i++) {
+      pthread_join(threads[i], NULL);
+    }
+
+    char *encoded = curl_escape(path, 0);
+    curl_slist *headers = NULL;
+    add_header(&headers, "x-object-manifest", manifest);
+    add_header(&headers, "x-object-meta-mtime", meta_mtime);
+    add_header(&headers, "Content-Length", "0");
+    response = send_request_size("PUT", encoded, NULL, NULL, headers, 0);
+    curl_slist_free_all(headers);
+
+    curl_free(encoded);
+    return (response >= 200 && response < 300);
+
+  }
+
   rewind(fp);
   char *encoded = curl_escape(path, 0);
   int response = send_request("PUT", encoded, fp, NULL, NULL);
@@ -385,6 +505,8 @@ int cloudfs_list_directory(const char *path, dir_entry **dir_list)
         de->isdir = de->content_type &&
             ((strstr(de->content_type, "application/folder") != NULL) ||
              (strstr(de->content_type, "application/directory") != NULL));
+        de->islink = de->content_type &&
+            ((strstr(de->content_type, "application/link") != NULL));
         if (de->isdir)
         {
           if (!strncasecmp(de->name, last_subdir, sizeof(last_subdir)))
@@ -442,6 +564,19 @@ int cloudfs_copy_object(const char *src, const char *dst)
   int response = send_request("PUT", dst_encoded, NULL, NULL, headers);
   curl_free(dst_encoded);
   curl_slist_free_all(headers);
+  return (response >= 200 && response < 300);
+}
+
+int cloudfs_create_symlink(const char *src, const char *dst)
+{
+  char *dst_encoded = curl_escape(dst, 0);
+
+  FILE *lnk = tmpfile();
+  fwrite(src, strlen(src), 1, lnk);
+  fwrite("\0", 1, 1, lnk);
+  int response = send_request("MKLINK", dst_encoded, lnk, NULL, NULL);
+  curl_free(dst_encoded);
+  fclose(lnk);
   return (response >= 200 && response < 300);
 }
 

@@ -20,8 +20,17 @@ typedef struct dir_entry
   off_t size;
   time_t last_modified;
   int isdir;
+  int islink;
   struct dir_entry *next;
 } dir_entry;
+
+struct segment_info
+{
+    FILE *fp;
+    int part;
+    long size;
+    char *seg_base;
+};
 
 void cloudfs_init();
 void cloudfs_set_credentials(char *username, char *tenant, char *password,
@@ -32,6 +41,7 @@ int cloudfs_object_write_fp(const char *path, FILE *fp);
 int cloudfs_list_directory(const char *path, dir_entry **);
 int cloudfs_delete_object(const char *path);
 int cloudfs_copy_object(const char *src, const char *dst);
+int cloudfs_create_symlink(const char *src, const char *dst);
 int cloudfs_create_directory(const char *label);
 int cloudfs_object_truncate(const char *path, off_t size);
 off_t cloudfs_file_size(int fd);
