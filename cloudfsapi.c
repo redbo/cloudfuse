@@ -269,6 +269,28 @@ void cloudfs_init()
   }
 }
 
+void *upload_segment(void *seginfo)
+{
+  char seg_path[MAX_URL_SIZE];
+  struct segment_info *info;
+  info = (struct segment_info *)seginfo;
+
+  fseek(info->fp, info->part * segment_size, SEEK_SET);
+
+  snprintf(seg_path, MAX_URL_SIZE, "%s%08i", info->seg_base, info->part);
+  char *encoded = curl_escape(seg_path, 0);
+  int response = send_request_size("PUT", encoded, info->fp, NULL, NULL,
+      info->size);
+
+  if (!(response >= 200 && response < 300))
+    fprintf(stderr, "Segment upload %s failed with response %d", seg_path,
+         response);
+
+  curl_free(encoded);
+  fclose(info->fp);
+  pthread_exit(NULL);
+}
+
 int cloudfs_object_read_fp(const char *path, FILE *fp)
 {
 
@@ -282,42 +304,48 @@ int cloudfs_object_read_fp(const char *path, FILE *fp)
     int i;
     long remaining = flen % segment_size;
     int full_segments = flen / segment_size;
+    int segments = full_segments + (remaining > 0);
 
     char manifest[MAX_URL_SIZE];
+
+    // TODO: actually set this to now
     char *meta_mtime = "1386971541.005863";
 
     char seg_base[MAX_URL_SIZE];
-    char seg_path[MAX_URL_SIZE];
+    char file_path[PATH_MAX];
     int response;
 
     char *string = strdup(path);
 
-    sprintf(seg_base, "/%s", strsep(&string, "/"));
+    snprintf(seg_base, MAX_URL_SIZE, "%s", strsep(&string, "/"));
     char *container = strsep(&string, "/");
     char *object = strsep(&string, "/");
-    sprintf(manifest, "%s_segments/%s/%s/%ld/%ld/", container, object,
-            meta_mtime, flen, segment_size);
 
-    sprintf(seg_base, "%s/%s", seg_base, manifest);
+    snprintf(manifest, MAX_URL_SIZE, "%s_segments/%s/%s/%ld/%ld/", container,
+        object, meta_mtime, flen, segment_size);
+
+    snprintf(seg_base, MAX_URL_SIZE, "%s/%s", seg_base, manifest);
+
     free(string);
 
-    for (i = 0; i < full_segments; i++) {
-        fseek(fp, i * segment_size, SEEK_SET);
-        sprintf(seg_path, "%s%08i", seg_base, i);
-        char *encoded = curl_escape(seg_path, 0);
-        response = send_request_size("PUT", encoded, fp, NULL, NULL, segment_size);
-        curl_free(encoded);
+    struct segment_info *info = (struct segment_info *)
+            malloc(segments * sizeof(struct segment_info));
+
+    pthread_t *threads = (pthread_t *)malloc(segments * sizeof(pthread_t));
+
+    //TODO: portability?
+    snprintf(file_path, PATH_MAX, "/proc/self/fd/%d", fileno(fp));
+
+    for (i = 0; i < segments; i++) {
+      info[i].fp = fopen(file_path, "r");
+      info[i].part = i;
+      info[i].size = i < full_segments ? segment_size : remaining;
+      info[i].seg_base = seg_base;
+      pthread_create(&threads[i], NULL, upload_segment, (void *)&(info[i]));
     }
 
-    if (remaining) {
-
-        //fseek(fp, remaining, SEEK_END);
-	// this won't work multithreaded
-        fseek(fp, i * segment_size, SEEK_SET);
-        sprintf(seg_path, "%s%08i", seg_base, full_segments);
-        char *encoded = curl_escape(seg_path, 0);
-        response = send_request_size("PUT", encoded, fp, NULL, NULL, remaining);
-        curl_free(encoded);
+    for (i = 0; i < segments; i++) {
+      pthread_join(threads[i], NULL);
     }
 
     char *encoded = curl_escape(path, 0);
