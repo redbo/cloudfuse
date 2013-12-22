@@ -4,6 +4,7 @@
 #include <stdarg.h>
 #include <stdlib.h>
 #include <sys/stat.h>
+#include <fcntl.h>
 #ifdef __linux__
 #include <alloca.h>
 #endif
@@ -333,8 +334,13 @@ int cloudfs_object_read_fp(const char *path, FILE *fp)
 
     pthread_t *threads = (pthread_t *)malloc(segments * sizeof(pthread_t));
 
-    //TODO: portability?
+#ifdef __linux__
     snprintf(file_path, PATH_MAX, "/proc/self/fd/%d", fileno(fp));
+#else
+    //TODO: I haven't actually tested this
+    if (fcntl(fileno(fp), F_GETPATH, file_path) == -1)
+      fprintf(stderr, "couldn't get the path name\n");
+#endif
 
     for (i = 0; i < segments; i++) {
       info[i].fp = fopen(file_path, "r");
