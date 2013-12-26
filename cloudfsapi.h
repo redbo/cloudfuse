@@ -2,11 +2,10 @@
 #define _CLOUDFSAPI_H
 
 #include <curl/curl.h>
-#include <curl/types.h>
 #include <curl/easy.h>
 
 #define BUFFER_INITIAL_SIZE 4096
-#define MAX_HEADER_SIZE 4096
+#define MAX_HEADER_SIZE 8192
 #define MAX_PATH_SIZE (1024 + 256 + 3)
 #define MAX_URL_SIZE (MAX_PATH_SIZE * 3)
 #define USER_AGENT "CloudFuse"
@@ -24,18 +23,21 @@ typedef struct dir_entry
   struct dir_entry *next;
 } dir_entry;
 
-int object_read_fp(const char *path, FILE *fp);
-int object_write_fp(const char *path, FILE *fp);
-int list_directory(const char *path, dir_entry **);
-int delete_object(const char *path);
-int create_directory(const char *label);
-int cloudfs_connect(char *username, char *password, char *authurl, int snet_rewrite);
+void cloudfs_init();
+void cloudfs_set_credentials(char *username, char *tenant, char *password,
+                             char *authurl, char *region, int use_snet);
+int cloufds_connect();
+int cloudfs_object_read_fp(const char *path, FILE *fp);
+int cloudfs_object_write_fp(const char *path, FILE *fp);
+int cloudfs_list_directory(const char *path, dir_entry **);
+int cloudfs_delete_object(const char *path);
+int cloudfs_copy_object(const char *src, const char *dst);
+int cloudfs_create_directory(const char *label);
+int cloudfs_object_truncate(const char *path, off_t size);
+off_t cloudfs_file_size(int fd);
 void cloudfs_debug(int dbg);
-void free_dir_list(dir_entry *dir_list);
-int object_truncate(const char *path, off_t size);
-
-void load_mimetypes(const char *filename);
-off_t file_size(int fd);
+void cloudfs_verify_ssl(int dbg);
+void cloudfs_free_dir_list(dir_entry *dir_list);
 
 void debugf(char *fmt, ...);
 #endif

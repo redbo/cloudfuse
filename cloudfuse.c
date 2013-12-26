@@ -17,7 +17,9 @@
 #include "cloudfsapi.h"
 #include "config.h"
 
+
 #define OPTION_SIZE 1024
+
 static int cache_timeout;
 
 typedef struct dir_cache
@@ -35,6 +37,7 @@ typedef struct
   int fd;
   int flags;
 } openfile;
+
 
 static void dir_for(const char *path, char *dir)
 {
@@ -68,15 +71,15 @@ static int caching_list_directory(const char *path, dir_entry **list)
       break;
   if (!cw)
   {
-    if (!list_directory(path, list))
+    if (!cloudfs_list_directory(path, list))
       return  0;
     cw = new_cache(path);
   }
   else if (cache_timeout > 0 && (time(NULL) - cw->cached > cache_timeout))
   {
-    if (!list_directory(path, list))
+    if (!cloudfs_list_directory(path, list))
       return  0;
-    free_dir_list(cw->entries);
+    cloudfs_free_dir_list(cw->entries);
     cw->cached = time(NULL);
   }
   else
@@ -140,7 +143,7 @@ static void dir_decache(const char *path)
         cw->prev->next = cw->next;
       if (cw->next)
         cw->next->prev = cw->prev;
-      free_dir_list(cw->entries);
+      cloudfs_free_dir_list(cw->entries);
       free(cw->path);
       free(cw);
     }
@@ -151,7 +154,7 @@ static void dir_decache(const char *path)
         de = cw->entries;
         cw->entries = de->next;
         de->next = NULL;
-        free_dir_list(de);
+        cloudfs_free_dir_list(de);
       }
       else for (de = cw->entries; de->next; de = de->next)
       {
@@ -160,7 +163,7 @@ static void dir_decache(const char *path)
           tmpde = de->next;
           de->next = de->next->next;
           tmpde->next = NULL;
-          free_dir_list(tmpde);
+          cloudfs_free_dir_list(tmpde);
           break;
         }
       }
@@ -209,7 +212,6 @@ static int cfs_getattr(const char *path, struct stat *stbuf)
     stbuf->st_size = de->size;
     /* calc. blocks as if 4K blocksize filesystem; stat uses units of 512B */
     stbuf->st_blocks = ((4095 + de->size) / 4096) * 8;
-    debugf("size %ld blocks %ld", de->size, stbuf->st_blocks);
     stbuf->st_mode = S_IFREG | 0666;
     stbuf->st_nlink = 1;
   }
@@ -221,7 +223,7 @@ static int cfs_fgetattr(const char *path, struct stat *stbuf, struct fuse_file_i
   openfile *of = (openfile *)(uintptr_t)info->fh;
   if (of)
   {
-    stbuf->st_size = file_size(of->fd);
+    stbuf->st_size = cloudfs_file_size(of->fd);
     stbuf->st_mode = S_IFREG | 0666;
     stbuf->st_nlink = 1;
     return 0;
@@ -243,7 +245,7 @@ static int cfs_readdir(const char *path, void *buf, fuse_fill_dir_t filldir, off
 
 static int cfs_mkdir(const char *path, mode_t mode)
 {
-  if (create_directory(path))
+  if (cloudfs_create_directory(path))
   {
     update_dir_cache(path, 0, 1);
     return 0;
@@ -267,14 +269,15 @@ static int cfs_create(const char *path, mode_t mode, struct fuse_file_info *info
 static int cfs_open(const char *path, struct fuse_file_info *info)
 {
   FILE *temp_file = tmpfile();
+  dir_entry *de = path_info(path);
   if (!(info->flags & O_WRONLY))
   {
-    if (!object_write_fp(path, temp_file))
+    if (!cloudfs_object_write_fp(path, temp_file))
     {
       fclose(temp_file);
       return -ENOENT;
     }
-    update_dir_cache(path, 0, 0);
+    update_dir_cache(path, (de ? de->size : 0), 0);
   }
   openfile *of = (openfile *)malloc(sizeof(openfile));
   of->fd = dup(fileno(temp_file));
@@ -295,12 +298,12 @@ static int cfs_flush(const char *path, struct fuse_file_info *info)
   openfile *of = (openfile *)(uintptr_t)info->fh;
   if (of)
   {
-    update_dir_cache(path, file_size(of->fd), 0);
+    update_dir_cache(path, cloudfs_file_size(of->fd), 0);
     if (of->flags & O_RDWR || of->flags & O_WRONLY)
     {
       FILE *fp = fdopen(dup(of->fd), "r");
       rewind(fp);
-      if (!object_read_fp(path, fp))
+      if (!cloudfs_object_read_fp(path, fp))
       {
         fclose(fp);
         return -ENOENT;
@@ -319,7 +322,7 @@ static int cfs_release(const char *path, struct fuse_file_info *info)
 
 static int cfs_rmdir(const char *path)
 {
-  if (delete_object(path))
+  if (cloudfs_delete_object(path))
   {
     dir_decache(path);
     return 0;
@@ -345,7 +348,7 @@ static int cfs_write(const char *path, const char *buf, size_t length, off_t off
 
 static int cfs_unlink(const char *path)
 {
-  if (delete_object(path))
+  if (cloudfs_delete_object(path))
   {
     dir_decache(path);
     return 0;
@@ -360,7 +363,7 @@ static int cfs_fsync(const char *path, int idunno, struct fuse_file_info *info)
 
 static int cfs_truncate(const char *path, off_t size)
 {
-  object_truncate(path, size);
+  cloudfs_object_truncate(path, size);
   return 0;
 }
 
@@ -388,6 +391,28 @@ static int cfs_chmod(const char *path, mode_t mode)
   return 0;
 }
 
+static int cfs_rename(const char *src, const char *dst)
+{
+  dir_entry *src_de = path_info(src);
+  if (!src_de)
+      return -ENOENT;
+  if (src_de->isdir)
+    return -EISDIR;
+  if (cloudfs_copy_object(src, dst))
+  {
+    /* FIXME this isn't quite right as doesn't preserve last modified */
+    update_dir_cache(dst, src_de->size, 0);
+    return cfs_unlink(src);
+  }
+  return -EIO;
+}
+
+static void *cfs_init(struct fuse_conn_info *conn)
+{
+  signal(SIGPIPE, SIG_IGN);
+  return NULL;
+}
+
 char *get_home_dir()
 {
   char *home;
@@ -399,40 +424,48 @@ char *get_home_dir()
   return "~";
 }
 
+static struct options {
+    char username[OPTION_SIZE];
+    char tenant[OPTION_SIZE];
+    char password[OPTION_SIZE];
+    char cache_timeout[OPTION_SIZE];
+    char authurl[OPTION_SIZE];
+    char region[OPTION_SIZE];
+    char use_snet[OPTION_SIZE];
+    char verify_ssl[OPTION_SIZE];
+} options = {
+    .username = "",
+    .password = "",
+    .tenant = "",
+    .cache_timeout = "600",
+    .authurl = "https://identity.api.rackspacecloud.com/v2.0/",
+    .region = "",
+    .use_snet = "false",
+    .verify_ssl = "true",
+};
+
+int parse_option(void *data, const char *arg, int key, struct fuse_args *outargs)
+{
+  if (sscanf(arg, " username = %[^\r\n ]", options.username) ||
+      sscanf(arg, " tenant = %[^\r\n ]", options.tenant) ||
+      sscanf(arg, " api_key = %[^\r\n ]", options.password) ||
+      sscanf(arg, " password = %[^\r\n ]", options.password) ||
+      sscanf(arg, " cache_timeout = %[^\r\n ]", options.cache_timeout) ||
+      sscanf(arg, " authurl = %[^\r\n ]", options.authurl) ||
+      sscanf(arg, " region = %[^\r\n ]", options.region) ||
+      sscanf(arg, " use_snet = %[^\r\n ]", options.use_snet) ||
+      sscanf(arg, " verify_ssl = %[^\r\n ]", options.verify_ssl))
+    return 0;
+  if (!strcmp(arg, "-f") || !strcmp(arg, "-d") || !strcmp(arg, "debug"))
+    cloudfs_debug(1);
+  return 1;
+}
+
 int main(int argc, char **argv)
 {
   char settings_filename[MAX_PATH_SIZE] = "";
   FILE *settings;
   struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
-
-  struct options {
-      char username[OPTION_SIZE];
-      char api_key[OPTION_SIZE];
-      char cache_timeout[OPTION_SIZE];
-      char authurl[OPTION_SIZE];
-      char use_snet[OPTION_SIZE];
-  } options = {
-      .username = "",
-      .api_key = "",
-      .cache_timeout = "600",
-      .authurl = "https://auth.api.rackspacecloud.com/v1.0",
-      .use_snet = "false",
-  };
-
-  int parse_option(void *data, const char *arg, int key, struct fuse_args *outargs)
-  {
-    if (sscanf(arg, " username = %[^\r\n ]", options.username) ||
-        sscanf(arg, " api_key = %[^\r\n ]", options.api_key) ||
-        sscanf(arg, " cache_timeout = %[^\r\n ]", options.cache_timeout) ||
-        sscanf(arg, " authurl = %[^\r\n ]", options.authurl) ||
-        sscanf(arg, " use_snet = %[^\r\n ]", options.use_snet))
-      return 0;
-    if (!strcmp(arg, "-f") || !strcmp(arg, "-d") || !strcmp(arg, "debug"))
-      cloudfs_debug(1);
-    return 1;
-  }
-
-  fuse_opt_parse(&args, &options, NULL, parse_option);
 
   snprintf(settings_filename, sizeof(settings_filename), "%s/.cloudfuse", get_home_dir());
   if ((settings = fopen(settings_filename, "r")))
@@ -443,26 +476,38 @@ int main(int argc, char **argv)
     fclose(settings);
   }
 
+  fuse_opt_parse(&args, &options, NULL, parse_option);
+
   cache_timeout = atoi(options.cache_timeout);
 
-  if (!*options.username || !*options.api_key)
+  if (!*options.username || !*options.password)
   {
     fprintf(stderr, "Unable to determine username and API key.\n\n");
     fprintf(stderr, "These can be set either as mount options or in"
-                    " a file named %s\n\n", settings_filename);
-    fprintf(stderr, "  username=[Mosso username]\n");
-    fprintf(stderr, "  api_key=[Mosso api key]\n\n");
-    fprintf(stderr, "These entries are optional:\n\n");
-    fprintf(stderr, "  cache_timeout=[seconds for directory caching]\n");
-    fprintf(stderr, "  use_snet=[True to connect to snet]\n");
-    fprintf(stderr, "  authurl=[used for testing]\n");
+                    "a file named %s\n\n", settings_filename);
+    fprintf(stderr, "  username=[Account username]\n");
+    fprintf(stderr, "  api_key=[API key (or password for Keystone API)]\n\n");
+    fprintf(stderr, "The following settings are optional:\n\n");
+    fprintf(stderr, "  authurl=[Authentication url - connect to non-Rackspace Swift]\n");
+    fprintf(stderr, "  tenant=[Tenant for authentication with Keystone]\n");
+    fprintf(stderr, "  password=[Password for authentication with Keystone]\n");
+    fprintf(stderr, "  use_snet=[True to use Rackspace ServiceNet for connections]\n");
+    fprintf(stderr, "  cache_timeout=[Seconds for directory caching, default 600]\n");
+    fprintf(stderr, "  verify_ssl=[False to disable SSL cert verification]\n");
+
     return 1;
   }
 
-  if (!cloudfs_connect(options.username, options.api_key, options.authurl,
-        !strcasecmp(options.use_snet, "true")))
+  cloudfs_init();
+
+  cloudfs_verify_ssl(!strcasecmp(options.verify_ssl, "true"));
+
+  cloudfs_set_credentials(options.username, options.tenant, options.password,
+                          options.authurl, options.region,
+                          !strcasecmp(options.use_snet, "true"));
+  if (!cloudfs_connect())
   {
-    fprintf(stderr, "Unable to authenticate.\n");
+    fprintf(stderr, "Failed to authenticate.\n");
     return 1;
   }
 
@@ -490,10 +535,11 @@ int main(int argc, char **argv)
     .statfs = cfs_statfs,
     .chmod = cfs_chmod,
     .chown = cfs_chown,
+    .rename = cfs_rename,
+    .init = cfs_init,
   };
 
   pthread_mutex_init(&dmut, NULL);
-  signal(SIGPIPE, SIG_IGN);
   return fuse_main(args.argc, args.argv, &cfs_oper, &options);
 }
 

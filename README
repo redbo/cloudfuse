@@ -21,6 +21,9 @@ BUILDING:
         apt-get install build-essential libcurl4-openssl-dev libxml2-dev \
              libssl-dev libfuse-dev
 
+    For CentOS or similar,
+        yum install gcc make fuse-devel curl-devel libxml2-devel openssl-devel
+
     Cloudfuse is built and installed like any other autoconf configured code.
     Normally,
         ./configure
@@ -32,35 +35,56 @@ BUILDING:
 
 USE:
 
-    Your Rackspace Cloud username and API key can be placed in a file
-    named $HOME/.cloudfuse:
-        username=[username]
-        api_key=[api key]
+    The following settings can be defined in the file ~/.cloudfuse:
+        username=[Account username for authentication, required]
+        api_key=[API key for authentication with Rackspace]
+        tenant=[Tenant for authentication with Openstack]
+        password=[Authentication password with Openstack]
+        authurl=[Authentication url, defaults to Rackspace's cloud]
+        region=[Regional endpoint to use]
+        use_snet=[True to use Rackspace ServiceNet for connections]
+        cache_timeout=[Seconds for directory caching, default 600]
+        verify_ssl=[False to disable SSL cert verification]
 
-    Or as mount options on the command line:
+    For authenticating with Rackspace's cloud, at minimum "username" and
+    "api_key" must be set.
+
+    For authenticating with Keystone, "username", "password", "tenant", and
+    "authurl" should probably be defined.
+
+    These settings can also be specified as mount options on the command line:
         cloudfuse -o username=redbo,api_key=713aa... mountpoint/
 
     Or as mount options in /etc/fstab:
         cloudfuse /mnt/cloudfiles fuse username=redbo,api_key=713aa...,user 0 0
 
-    The following options are... optional:
-        use_snet=[True to use servicenet for connections]
-        cache_timeout=[seconds for directory caching, default 600]
-        authurl=[authentication url - connect to non-Rackspace (swift) cluster]
-
     It also inherits a number of command-line arguments and mount options from
     the Fuse framework.  The "-h" argument should provide a summary.
 
-    Your OS user will need access to the "fuse" group.  This can probably be
-    accomplished with:
-        sudo usermod -a -G fuse [username]
+
+EXAMPLE:
+
+    A typical ~/.cloudfuse configuration file for use with Rackspace:
+        username=demo
+        api_key=643afce8b5187d40ba15e4827384fc5b
+        
+        # if no region is selected, it will use your default region.
+        #   region=DFW
+        
+        # if connecting within a Rackspace datacenter, ServiceNet can be
+        # used to avoid bandwidth charges.
+        #   use_snet=true
+
+    A typical ~/.cloudfuse configuration file for use with OpenStack:
+        username=demo
+        tenant=demo
+        password=supersecret
+        authurl=http://10.10.0.1:5000/v2.0
 
 
 BUGS/SHORTCOMINGS:
 
-    * Doesn't implement rename().  There's no good way to do this with the
-      Cloud Files API.  Unfortunately, this makes cloudfuse considerably less
-      useful in Finder, as it expects to be able to rename a lot.
+    * rename() doesn't work on directories (and probably never will).
     * When reading and writing files, it buffers them in a local temp file.
     * It keeps an in-memory cache of the directory structure, so it may not be
       usable for large file systems.  Also, files added by other applications
@@ -71,6 +95,18 @@ BUGS/SHORTCOMINGS:
       "application/directory".
     * Cloud Files limits container and object listings to 10,000 items.
       cloudfuse won't list more than that many files in a single directory.
+
+
+AWESOME CONTRIBUTORS:
+
+    * Tim Dysinger                                 https://github.com/dysinger
+    * Chris Wedgwood                               https://github.com/cwedgwood
+    * Nick Craig-Wood                              https://github.com/ncw
+    * Dillon Amburgey                              https://github.com/dillona
+    * Manfred Touron                               https://github.com/moul
+    * David Brownlee                               https://github.com/abs0
+    * Mike Lundy                                   https://github.com/novas0x2a
+    * justinb                                      https://github.com/justinsb
 
 
 Thanks, and I hope you find it useful.
