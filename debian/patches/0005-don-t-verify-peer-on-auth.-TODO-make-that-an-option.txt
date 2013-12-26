@@ -1,0 +1,26 @@
+From 1e9426ad7f4bb071aaf1297fc0899b6d5f902b2b Mon Sep 17 00:00:00 2001
+From: Mike Barton <mike@weirdlooking.com>
+Date: Fri, 1 Apr 2011 18:07:21 +0000
+Subject: [PATCH 05/17] don't verify peer on auth.. TODO: make that an option
+
+---
+ cloudfsapi.c |    2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/cloudfsapi.c b/cloudfsapi.c
+index 29fb87b..8ada14a 100644
+--- a/cloudfsapi.c
++++ b/cloudfsapi.c
+@@ -402,7 +402,9 @@ int cloudfs_connect(char *username, char *password, char *authurl, int use_snet)
+   curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, &header_dispatch);
+   curl_easy_setopt(curl, CURLOPT_USERAGENT, USER_AGENT);
+   curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1);
++  curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0);
+   curl_easy_setopt(curl, CURLOPT_TIMEOUT, 10);
++  curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 10);
+   curl_easy_perform(curl);
+   curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response);
+   curl_slist_free_all(headers);
+-- 
+1.7.9.5
+

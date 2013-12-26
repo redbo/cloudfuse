@@ -1,0 +1,121 @@
+From 57a4969ef39427e23232c8ecbcbf90b6f57343d7 Mon Sep 17 00:00:00 2001
+From: Mike Barton <mike@weirdlooking.com>
+Date: Fri, 12 Aug 2011 10:55:01 +0000
+Subject: [PATCH 11/17] arrange code back to my preference ;)
+
+---
+ README      |    1 +
+ cloudfuse.c |   36 +++++++++++++++++++++++++++++++++++-
+ cloudfuse.h |   34 ----------------------------------
+ 3 files changed, 36 insertions(+), 35 deletions(-)
+ delete mode 100644 cloudfuse.h
+
+diff --git a/README b/README
+index 7da4e6d..bc2bf04 100644
+--- a/README
++++ b/README
+@@ -76,6 +76,7 @@ AWESOME CONTRIBUTORS:
+     * Tim Dysinger fixed the Makefile              https://github.com/dysinger
+     * Chris Wedgwood made du work by fixing stat   https://github.com/cwedgwood
+     * Nick Craig-Wood implemented rename           https://github.com/ncw
++    * Dillon Amburgey made it compile on clang     https://github.com/dillona
+ 
+ 
+ Thanks, and I hope you find it useful.
+diff --git a/cloudfuse.c b/cloudfuse.c
+index 6149338..bf7e195 100644
+--- a/cloudfuse.c
++++ b/cloudfuse.c
+@@ -16,7 +16,27 @@
+ #include <stddef.h>
+ #include "cloudfsapi.h"
+ #include "config.h"
+-#include "cloudfuse.h"
++
++
++#define OPTION_SIZE 1024
++
++static int cache_timeout;
++
++typedef struct dir_cache
++{
++  char *path;
++  dir_entry *entries;
++  time_t cached;
++  struct dir_cache *next, *prev;
++} dir_cache;
++static dir_cache *dcache;
++static pthread_mutex_t dmut;
++
++typedef struct
++{
++  int fd;
++  int flags;
++} openfile;
+ 
+ 
+ static void dir_for(const char *path, char *dir)
+@@ -397,6 +417,20 @@ char *get_home_dir()
+   return "~";
+ }
+ 
++static struct options {
++    char username[OPTION_SIZE];
++    char api_key[OPTION_SIZE];
++    char cache_timeout[OPTION_SIZE];
++    char authurl[OPTION_SIZE];
++    char use_snet[OPTION_SIZE];
++} options = {
++    .username = "",
++    .api_key = "",
++    .cache_timeout = "600",
++    .authurl = "https://auth.api.rackspacecloud.com/v1.0",
++    .use_snet = "false",
++};
++
+ int parse_option(void *data, const char *arg, int key, struct fuse_args *outargs)
+ {
+   if (sscanf(arg, " username = %[^\r\n ]", options.username) ||
+diff --git a/cloudfuse.h b/cloudfuse.h
+deleted file mode 100644
+index 2572be2..0000000
+--- a/cloudfuse.h
++++ /dev/null
+@@ -1,34 +0,0 @@
+-#define OPTION_SIZE 1024
+-
+-static int cache_timeout;
+-
+-typedef struct dir_cache
+-{
+-  char *path;
+-  dir_entry *entries;
+-  time_t cached;
+-  struct dir_cache *next, *prev;
+-} dir_cache;
+-static dir_cache *dcache;
+-static pthread_mutex_t dmut;
+-
+-typedef struct
+-{
+-  int fd;
+-  int flags;
+-} openfile;
+-
+-struct options {
+-    char username[OPTION_SIZE];
+-    char api_key[OPTION_SIZE];
+-    char cache_timeout[OPTION_SIZE];
+-    char authurl[OPTION_SIZE];
+-    char use_snet[OPTION_SIZE];
+-} options = {
+-    .username = "",
+-    .api_key = "",
+-    .cache_timeout = "600",
+-    .authurl = "https://auth.api.rackspacecloud.com/v1.0",
+-    .use_snet = "false",
+-};
+-
+-- 
+1.7.9.5
+

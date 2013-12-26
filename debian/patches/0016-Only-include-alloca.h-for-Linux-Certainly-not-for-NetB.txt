@@ -1,0 +1,27 @@
+From 556b887300db437f55cf61e9acb9c5ca5065b404 Mon Sep 17 00:00:00 2001
+From: David Brownlee <abs@absd.org>
+Date: Fri, 14 Oct 2011 18:25:40 +0100
+Subject: [PATCH 16/17] Only include <alloca.h> for Linux (Certainly not for
+ NetBSD)
+
+---
+ cloudfsapi.c |    2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/cloudfsapi.c b/cloudfsapi.c
+index 0940da0..b983567 100644
+--- a/cloudfsapi.c
++++ b/cloudfsapi.c
+@@ -4,7 +4,9 @@
+ #include <stdarg.h>
+ #include <stdlib.h>
+ #include <sys/stat.h>
++#ifdef __linux__
+ #include <alloca.h>
++#endif
+ #include <pthread.h>
+ #include <time.h>
+ #include <unistd.h>
+-- 
+1.7.9.5
+

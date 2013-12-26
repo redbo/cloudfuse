@@ -1,0 +1,41 @@
+From f23367e19c3ca77694d100b6a1ac3d00125e59b4 Mon Sep 17 00:00:00 2001
+From: Mike Lundy <mike@fluffypenguin.org>
+Date: Wed, 31 Aug 2011 15:57:44 -0700
+Subject: [PATCH 13/17] add openssl to the configure discovery
+
+---
+ Makefile.in  |    4 ++--
+ configure.in |    1 +
+ 2 files changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/Makefile.in b/Makefile.in
+index ab64bc0..05a22c5 100644
+--- a/Makefile.in
++++ b/Makefile.in
+@@ -2,9 +2,9 @@
+ .SUFFIXES: .c .o
+ 
+ CC = @CC@
+-CFLAGS = @CFLAGS@ @XML_CFLAGS@ @CURL_CFLAGS@ @FUSE_CFLAGS@
++CFLAGS = @CFLAGS@ @XML_CFLAGS@ @CURL_CFLAGS@ @FUSE_CFLAGS@ @OPENSSL_CFLAGS@
+ LDFLAGS = @LDFLAGS@
+-LIBS = @LIBS@ @XML_LIBS@ @CURL_LIBS@ @FUSE_LIBS@
++LIBS = @LIBS@ @XML_LIBS@ @CURL_LIBS@ @FUSE_LIBS@ @OPENSSL_LIBS@
+ INSTALL = @INSTALL@
+ MKDIR_P = @MKDIR_P@
+ prefix = @prefix@
+diff --git a/configure.in b/configure.in
+index 9353ea3..1289317 100644
+--- a/configure.in
++++ b/configure.in
+@@ -17,6 +17,7 @@ AC_PROG_MKDIR_P
+ PKG_CHECK_MODULES(XML, libxml-2.0, , AC_MSG_ERROR('Unable to find libxml2. Please make sure library and header files are installed.'))
+ PKG_CHECK_MODULES(CURL, libcurl, , AC_MSG_ERROR('Unable to find libcurl.  Please make sure library and header files are installed.'))
+ PKG_CHECK_MODULES(FUSE, fuse, , AC_MSG_ERROR('Unable to find libfuse.  Please make sure library and header files are installed.'))
++PKG_CHECK_MODULES(OPENSSL, openssl, , [])
+ 
+ # Checks for header files.
+ AC_FUNC_ALLOCA
+-- 
+1.7.9.5
+

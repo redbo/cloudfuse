@@ -1,0 +1,17 @@
+0001-lock-mutex-around-login.txt
+0002-clear-xml-context-correctly-on-401.txt
+0003-change-how-xml-context-is-reset-on-re-auth.txt
+0004-improve-retry-logic-fix-multithreading-problems.txt
+0005-don-t-verify-peer-on-auth.-TODO-make-that-an-option.txt
+0006-even-unsafer-ssl-options.txt
+0007-Clean-up-C-code-remove-nested-functions.txt
+0008-Implement-rename-using-the-Copy-object-functionality.txt
+0009-add-contributors-to-README.txt
+0010-protect-directories-from-rename.txt
+0011-arrange-code-back-to-my-preference.txt
+0012-remove-deprecated-unneeded-include.txt
+0013-add-openssl-to-the-configure-discovery.txt
+0014-regenerate-configure.txt
+0015-make-Makefile-obey-DESTDIR.txt
+0016-Only-include-alloca.h-for-Linux-Certainly-not-for-NetB.txt
+0017-parse-size-with-strtoll-Joseph-Dunn.txt
