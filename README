@@ -35,10 +35,20 @@ BUILDING:
 
 USE:
 
+    You'll need to install fuse to use this application. It may have already
+    been installed as a dependency if you followed the "BUILDING" instructions
+    above.
+    
+    On Debian:
+       apt-get install fuse
+       
+    On CentOS or similar:
+       yum install fuse
+
     The following settings can be defined in the file ~/.cloudfuse:
         username=[Account username for authentication, required]
         api_key=[API key for authentication with Rackspace]
-        tenant=[Tenant for authentication with Openstack]
+        tenant=[Tenant name for authentication with Openstack]
         password=[Authentication password with Openstack]
         authurl=[Authentication url, defaults to Rackspace's cloud]
         region=[Regional endpoint to use]
@@ -75,7 +85,8 @@ EXAMPLE:
         # used to avoid bandwidth charges.
         #   use_snet=true
 
-    A typical ~/.cloudfuse configuration file for use with OpenStack:
+    A typical ~/.cloudfuse configuration file for use with OpenStack,
+    noting that "tenant" should be the tenant name, rather than the ID:
         username=demo
         tenant=demo
         password=supersecret
