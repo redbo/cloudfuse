@@ -1,0 +1,20 @@
+Source: cloudfuse
+Section: utils
+Priority: optional
+Maintainer: Mike Mestnik <cheako+apt_repo@mikemestnik.net>
+Build-Depends: debhelper (>= 8.0.0), autotools-dev, libcurl4-openssl-dev, libxml2-dev, libssl-dev, libfuse-dev
+Standards-Version: 3.9.2
+#Vcs-Git: git://git.debian.org/collab-maint/cloudfuse.git
+#Vcs-Browser: http://git.debian.org/?p=collab-maint/cloudfuse.git;a=summary
+
+Package: cloudfuse
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, fuse (>= 2.7) [linux-any] | fuse4bsd [kfreebsd-any]
+Description: filesystem client based on Swift as used by Rackspace.
+ cloudfuse is a FUSE application which provides access to Rackspace's
+ Cloud Files (or any installation of Swift).
+ .
+ cloudfuse is FUSE (Filesystem in USErspace).
+ .
+ cloudfuse may work with Openstack's Swift, but is not provided by Openstack.
+

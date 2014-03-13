@@ -1,0 +1,16 @@
+cloudfuse for Debian
+--------------------
+
+Please note that the simplest way to allow mounting of Swift shares is to
+add the user to the fuse group (which will be created by the fuse-utils
+package).
+
+To add user 'foo' to the 'fuse' group type the following command (with root
+privileges):
+
+	adduser foo fuse
+
+If the user is currently logged in he/she should log out and log in 
+in order for this change to take effect.
+
+ -- Mike Mestnik <cheako+apt_repo@mikemestnik.net>  Mon, 04 Jun 2012 13:47:28 -0500

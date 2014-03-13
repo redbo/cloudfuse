@@ -1,0 +1,12 @@
+cloudfuse (0.9-1ubuntu1) precise; urgency=low
+
+  * Imported Upstream version 0.9
+  * Remove Debian patches already committed upstream
+
+ -- pataquets <amontero@tinet.org>  Wed, 15 Jan 2014 21:07:18 +0100
+
+cloudfuse (0.1-1) unstable; urgency=low
+
+  * Initial release
+
+ -- Mike Mestnik <cheako+apt_repo@mikemestnik.net>  Mon, 04 Jun 2012 13:47:28 -0500
