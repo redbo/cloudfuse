@@ -5,7 +5,7 @@ Cloud Files is a remote storage system which is similar in principle to
 Amazon S3.  It provides a simple RESTful interface to storing and retrieving
 objects.
 
-    http://www.rackspacecloud.com/cloud_hosting_products/files
+    http://www.rackspace.com/cloud/files/
 
 Swift, the software behind Cloud Files, has been open-sourced as part of the
 OpenStack project.
