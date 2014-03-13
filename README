@@ -93,7 +93,7 @@ DEBUGGING:
         
     Frequently, these are network or certificate errors.  Swift may not log 
     certificate failures, so the debug switch is important if you're using
-    cloudfuse for the first time, particularly on a non-Rackspace environment.
+    cloudfuse for the first time, particularly in a non-Rackspace environment.
     
     e.g. * Peer certificate cannot be authenticated with given CA certificates
          * About to connect() to 192.168.0.2 port 8080 (#0)
