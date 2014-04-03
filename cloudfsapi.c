@@ -127,6 +127,7 @@ static int send_request(char *method, const char *path, FILE *fp,
     curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1);
     curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 1);
     curl_easy_setopt(curl, CURLOPT_USERAGENT, USER_AGENT);
+    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, verify_ssl);
     curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, verify_ssl);
     curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 10);
     curl_easy_setopt(curl, CURLOPT_VERBOSE, debug);
