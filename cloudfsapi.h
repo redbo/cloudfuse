@@ -21,6 +21,7 @@ typedef struct dir_entry
   time_t last_modified;
   int isdir;
   struct dir_entry *next;
+  char *marker;
 } dir_entry;
 
 void cloudfs_init();

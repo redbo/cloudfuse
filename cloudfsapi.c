@@ -23,6 +23,9 @@
 
 #define REQUEST_RETRIES 4
 
+// defined by Rackspace
+#define MAX_RESULTS_PER_REQUEST 10000
+
 static char storage_url[MAX_URL_SIZE];
 static char storage_token[MAX_HEADER_SIZE];
 static pthread_mutex_t pool_mut;
@@ -284,17 +287,16 @@ int cloudfs_object_truncate(const char *path, off_t size)
   return (response >= 200 && response < 300);
 }
 
-int cloudfs_list_directory(const char *path, dir_entry **dir_list)
+int cloudfs_list_directory_internal(const char *path, dir_entry **dir_list)
 {
   char container[MAX_PATH_SIZE * 3] = "";
   char object[MAX_PATH_SIZE] = "";
   char last_subdir[MAX_PATH_SIZE] = "";
   int prefix_length = 0;
   int response = 0;
-  int retval = 0;
+  int retval = -1;
   int entry_count = 0;
 
-  *dir_list = NULL;
   xmlNode *onode = NULL, *anode = NULL, *text_node = NULL;
   xmlParserCtxtPtr xmlctx = xmlCreatePushParserCtxt(NULL, NULL, "", 0, NULL);
   if (!strcmp(path, "") || !strcmp(path, "/"))
@@ -325,10 +327,16 @@ int cloudfs_list_directory(const char *path, dir_entry **dir_list)
     curl_free(encoded_object);
   }
 
+  if (*dir_list != NULL) {
+    strcat(container, "&marker=");
+    strcat(container, (*dir_list)->marker);
+  }
+  printf("%s\n", container);
   response = send_request("GET", container, NULL, xmlctx, NULL);
   xmlParseChunk(xmlctx, "", 0, 1);
   if (xmlctx->wellFormed && response >= 200 && response < 300)
   {
+    retval = 0;
     xmlNode *root_element = xmlDocGetRootElement(xmlctx->myDoc);
     for (onode = root_element->children; onode; onode = onode->next)
     {
@@ -363,6 +371,7 @@ int cloudfs_list_directory(const char *path, dir_entry **dir_list)
             if (slash && (0 == *(slash + 1)))
               *slash = 0;
 
+            de->marker = strdup(content);
             if (asprintf(&(de->full_name), "%s/%s", path, de->name) < 0)
               de->full_name = NULL;
           }
@@ -396,13 +405,13 @@ int cloudfs_list_directory(const char *path, dir_entry **dir_list)
         }
         de->next = *dir_list;
         *dir_list = de;
+	retval++;
       }
       else
       {
         debugf("unknown element: %s", onode->name);
       }
     }
-    retval = 1;
   }
 
   debugf("entry count: %d", entry_count);
@@ -410,6 +419,18 @@ int cloudfs_list_directory(const char *path, dir_entry **dir_list)
   xmlFreeDoc(xmlctx->myDoc);
   xmlFreeParserCtxt(xmlctx);
   return retval;
+}
+
+int cloudfs_list_directory(const char *path, dir_entry **dir_list)
+{
+  int retval;
+  *dir_list = NULL;
+
+  do {
+    retval = cloudfs_list_directory_internal(path, dir_list);
+  } while(retval == MAX_RESULTS_PER_REQUEST);
+
+  return retval == -1 ? 0 : 1;
 }
 
 void cloudfs_free_dir_list(dir_entry *dir_list)
