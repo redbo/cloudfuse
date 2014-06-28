@@ -328,8 +328,10 @@ int cloudfs_list_directory_internal(const char *path, dir_entry **dir_list)
   }
 
   if (*dir_list != NULL) {
+    char *encoded_marker = curl_escape((*dir_list)->marker, 0);
     strcat(container, "&marker=");
-    strcat(container, (*dir_list)->marker);
+    strcat(container, encoded_marker);
+    curl_free(encoded_marker);
   }
   printf("%s\n", container);
   response = send_request("GET", container, NULL, xmlctx, NULL);
@@ -428,6 +430,7 @@ int cloudfs_list_directory(const char *path, dir_entry **dir_list)
 
   do {
     retval = cloudfs_list_directory_internal(path, dir_list);
+    printf("retval: %d\n", retval);
   } while(retval > 0);
 
   return retval == -1 ? 0 : 1;
