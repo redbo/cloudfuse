@@ -428,7 +428,7 @@ int cloudfs_list_directory(const char *path, dir_entry **dir_list)
 
   do {
     retval = cloudfs_list_directory_internal(path, dir_list);
-  } while(retval == MAX_RESULTS_PER_REQUEST);
+  } while(retval > 0);
 
   return retval == -1 ? 0 : 1;
 }
