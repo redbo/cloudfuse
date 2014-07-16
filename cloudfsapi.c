@@ -21,12 +21,12 @@
 #define RHEL5_LIBCURL_VERSION 462597
 #define RHEL5_CERTIFICATE_FILE "/etc/pki/tls/certs/ca-bundle.crt"
 
-#define REQUEST_RETRIES 4
+#define REQUEST_RETRIES 24
 
 static char storage_url[MAX_URL_SIZE];
 static char storage_token[MAX_HEADER_SIZE];
 static pthread_mutex_t pool_mut;
-static CURL *curl_pool[1024];
+static CURL *curl_pool[4096];
 static int curl_pool_count = 0;
 static int debug = 0;
 static int verify_ssl = 1;
