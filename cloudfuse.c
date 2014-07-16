@@ -407,6 +407,22 @@ static int cfs_rename(const char *src, const char *dst)
   return -EIO;
 }
 
+static int cfs_link(const char *src, const char *dst)
+{
+  dir_entry *src_de = path_info(src);
+  if (!src_de)
+      return -ENOENT;
+  if (src_de->isdir)
+    return -EISDIR;
+  if (cloudfs_copy_object(src, dst))
+  {
+    /* FIXME this isn't quite right as doesn't preserve last modified */
+    update_dir_cache(dst, src_de->size, 0);
+    return 0;
+  }
+  return -EIO;
+}
+
 static void *cfs_init(struct fuse_conn_info *conn)
 {
   signal(SIGPIPE, SIG_IGN);
@@ -536,6 +552,7 @@ int main(int argc, char **argv)
     .chmod = cfs_chmod,
     .chown = cfs_chown,
     .rename = cfs_rename,
+    .link = cfs_link,
     .init = cfs_init,
   };
 

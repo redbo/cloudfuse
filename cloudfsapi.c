@@ -23,9 +23,6 @@
 
 #define REQUEST_RETRIES 4
 
-// defined by Rackspace
-#define MAX_RESULTS_PER_REQUEST 10000
-
 static char storage_url[MAX_URL_SIZE];
 static char storage_token[MAX_HEADER_SIZE];
 static pthread_mutex_t pool_mut;
