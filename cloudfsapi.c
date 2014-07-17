@@ -23,6 +23,9 @@
 
 #define REQUEST_RETRIES 24
 
+// defined by Rackspace
+#define MAX_RESULTS_PER_REQUEST 10000
+
 static char storage_url[MAX_URL_SIZE];
 static char storage_token[MAX_HEADER_SIZE];
 static pthread_mutex_t pool_mut;
@@ -427,8 +430,8 @@ int cloudfs_list_directory(const char *path, dir_entry **dir_list)
 
   do {
     retval = cloudfs_list_directory_internal(path, dir_list);
-    printf("retval: %d\n", retval);
-  } while(retval > 0);
+    debugf("cloudfs_list_directory_internal retval: %d\n", retval);
+  } while(retval >= MAX_RESULTS_PER_REQUEST);
 
   return retval == -1 ? 0 : 1;
 }
