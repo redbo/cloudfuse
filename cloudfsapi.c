@@ -17,6 +17,7 @@
 #include <libxml/xpathInternals.h>
 #include "cloudfsapi.h"
 #include "config.h"
+#include <fuse.h>
 
 #define RHEL5_LIBCURL_VERSION 462597
 #define RHEL5_CERTIFICATE_FILE "/etc/pki/tls/certs/ca-bundle.crt"
@@ -34,6 +35,17 @@ static int curl_pool_count = 0;
 static int debug = 0;
 static int verify_ssl = 1;
 static int rhel5_mode = 0;
+static struct statvfs statcache = {
+  .f_bsize = 1,
+  .f_frsize = 1,
+  .f_blocks = INT_MAX,
+  .f_bfree = INT_MAX,
+  .f_bavail = INT_MAX,
+  .f_files = INT_MAX,
+  .f_ffree = 0,
+  .f_favail = 0,
+  .f_namemax = INT_MAX
+};
 
 #ifdef HAVE_OPENSSL
 #include <openssl/crypto.h>
@@ -93,6 +105,30 @@ static void add_header(curl_slist **headers, const char *name,
   char x_header[MAX_HEADER_SIZE];
   snprintf(x_header, sizeof(x_header), "%s: %s", name, value);
   *headers = curl_slist_append(*headers, x_header);
+}
+
+static size_t header_dispatch(void *ptr, size_t size, size_t nmemb, void *stream)
+{
+  debugf("Dispatching response headers");
+  char *header = (char *)alloca(size * nmemb + 1);
+  char *head = (char *)alloca(size * nmemb + 1);
+  char *value = (char *)alloca(size * nmemb + 1);
+  memcpy(header, (char *)ptr, size * nmemb);
+  header[size * nmemb] = '\0';
+  if (sscanf(header, "%[^:]: %[^\r\n]", head, value) == 2)
+  {
+    if (!strncasecmp(head, "x-auth-token", size * nmemb))
+      strncpy(storage_token, value, sizeof(storage_token));
+    if (!strncasecmp(head, "x-storage-url", size * nmemb))
+      strncpy(storage_url, value, sizeof(storage_url));
+    if (!strncasecmp(head, "x-account-meta-quota", size * nmemb))
+      statcache.f_blocks = strtoul(value, NULL, 10);
+    if (!strncasecmp(head, "x-account-bytes-used", size * nmemb))
+      statcache.f_bfree = statcache.f_bavail = statcache.f_blocks - strtoul(value, NULL, 10);
+    if (!strncasecmp(head, "x-account-object-count", size * nmemb))
+      statcache.f_files = strtoul(value, NULL, 10);
+  }
+  return size * nmemb;
 }
 
 static int send_request(char *method, const char *path, FILE *fp,
@@ -167,7 +203,10 @@ static int send_request(char *method, const char *path, FILE *fp,
       }
     }
     else
+    {
       curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, method);
+      curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, &header_dispatch);
+    }
     /* add the headers from extra_headers if any */
     curl_slist *extra;
     for (extra = extra_headers; extra; extra = extra->next)
@@ -190,23 +229,6 @@ static int send_request(char *method, const char *path, FILE *fp,
       xmlCtxtResetPush(xmlctx, NULL, 0, NULL, NULL);
   }
   return response;
-}
-
-static size_t header_dispatch(void *ptr, size_t size, size_t nmemb, void *stream)
-{
-  char *header = (char *)alloca(size * nmemb + 1);
-  char *head = (char *)alloca(size * nmemb + 1);
-  char *value = (char *)alloca(size * nmemb + 1);
-  memcpy(header, (char *)ptr, size * nmemb);
-  header[size * nmemb] = '\0';
-  if (sscanf(header, "%[^:]: %[^\r\n]", head, value) == 2)
-  {
-    if (!strncasecmp(head, "x-auth-token", size * nmemb))
-      strncpy(storage_token, value, sizeof(storage_token));
-    if (!strncasecmp(head, "x-storage-url", size * nmemb))
-      strncpy(storage_url, value, sizeof(storage_url));
-  }
-  return size * nmemb;
 }
 
 /*
@@ -466,6 +488,16 @@ int cloudfs_copy_object(const char *src, const char *dst)
   int response = send_request("PUT", dst_encoded, NULL, NULL, headers);
   curl_free(dst_encoded);
   curl_slist_free_all(headers);
+  return (response >= 200 && response < 300);
+}
+
+int cloudfs_statfs(const char *path, struct statvfs *stat)
+{
+  int response = send_request("HEAD", "/", NULL, NULL, NULL);
+
+  debugf("Assigning statvfs values from cache.");
+  *stat = statcache;
+
   return (response >= 200 && response < 300);
 }
 

@@ -369,16 +369,11 @@ static int cfs_truncate(const char *path, off_t size)
 
 static int cfs_statfs(const char *path, struct statvfs *stat)
 {
-  stat->f_bsize = 4096;
-  stat->f_frsize = 4096;
-  stat->f_blocks = INT_MAX;
-  stat->f_bfree = stat->f_blocks;
-  stat->f_bavail = stat->f_blocks;
-  stat->f_files = INT_MAX;
-  stat->f_ffree = INT_MAX;
-  stat->f_favail = INT_MAX;
-  stat->f_namemax = INT_MAX;
-  return 0;
+  if (cloudfs_statfs(path, stat)){
+    return 0;
+  }
+  else
+    return -EIO;
 }
 
 static int cfs_chown(const char *path, uid_t uid, gid_t gid)
