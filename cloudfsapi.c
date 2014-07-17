@@ -388,7 +388,7 @@ int cloudfs_list_directory_internal(const char *path, dir_entry **dir_list)
           }
           if (!strcasecmp((const char *)anode->name, "last_modified"))
           {
-            struct tm last_modified;
+            struct tm last_modified = {0};
             strptime(content, "%FT%T", &last_modified);
             de->last_modified = mktime(&last_modified);
           }
