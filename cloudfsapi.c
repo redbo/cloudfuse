@@ -222,6 +222,8 @@ static int send_request(char *method, const char *path, FILE *fp,
     return_connection(curl);
     if (response >= 200 && response < 400)
       return response;
+    if (response == 404 && !strcasecmp(method, "DELETE"))
+      return response;
     sleep(8 << tries); // backoff
     if (response == 401 && !cloudfs_connect()) // re-authenticate on 401s
       return response;
@@ -476,7 +478,7 @@ int cloudfs_delete_object(const char *path)
   char *encoded = curl_escape(path, 0);
   int response = send_request("DELETE", encoded, NULL, NULL, NULL);
   curl_free(encoded);
-  return (response >= 200 && response < 300);
+  return ((response >= 200 && response < 300) || response == 404);
 }
 
 int cloudfs_copy_object(const char *src, const char *dst)
