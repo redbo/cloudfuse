@@ -285,7 +285,6 @@ static int cfs_open(const char *path, struct fuse_file_info *info)
   of->flags = info->flags;
   info->fh = (uintptr_t)of;
   info->direct_io = 1;
-  info->nonseekable = 1; // requires fuse>=2.8
   return 0;
 }
 
