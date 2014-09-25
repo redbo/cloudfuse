@@ -466,10 +466,18 @@ void cloudfs_free_dir_list(dir_entry *dir_list)
   {
     dir_entry *de = dir_list;
     dir_list = dir_list->next;
-    free(de->name);
-    free(de->full_name);
-    free(de->content_type);
-    free(de);
+    if (NULL != de){
+        free(de->name);
+        de->name = NULL;
+        free(de->marker);
+        de->marker = NULL;
+        free(de->full_name);
+        de->full_name = NULL;
+        free(de->content_type);
+        de->content_type = NULL;
+        free(de);
+        de = NULL;
+    }
   }
 }
 
