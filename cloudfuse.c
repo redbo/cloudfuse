@@ -113,6 +113,7 @@ static void update_dir_cache(const char *path, off_t size, int isdir)
       de->size = size;
       de->isdir = isdir;
       de->name = strdup(&path[strlen(cw->path)+1]);
+      de->marker = strdup(de->name);
       de->full_name = strdup(path);
       de->content_type = strdup(isdir ? "application/directory" : "application/octet-stream");
       de->last_modified = time(NULL);

@@ -397,7 +397,7 @@ int cloudfs_list_directory_internal(const char *path, dir_entry **dir_list)
             if (slash && (0 == *(slash + 1)))
               *slash = 0;
 
-            de->marker = strdup(content);
+            de->marker = strdup(de->name);
             if (asprintf(&(de->full_name), "%s/%s", path, de->name) < 0)
               de->full_name = NULL;
           }
