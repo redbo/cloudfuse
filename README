@@ -93,6 +93,36 @@ EXAMPLE:
         authurl=http://10.10.0.1:5000/v2.0
 
 
+HEADER SPECIFICATIONS:
+
+    The option headers_spec option allows to specify headers to send
+    when a file is written.  A common use is to specify the
+    Content-Type header.  Rackspace's CloudFiles, for example, allows
+    14 different headers for specifying access controls, content
+    expiration, and content encoding.  Cloudfuse doesn't restrict what
+    headers can be specified, so use carefully.
+
+    The header value is set based on matching a path against a list of
+    globs.  Here's an example which sets the Content-Type header:
+
+      Content-Type: /foobucket/*.html text/html, "/*/my dir/*.txt" text/plain;
+
+    If no pattern matches, then the header is omitted.  Note that
+    double quotes can be used to specify a pattern that has spaces.
+    Multiple headers can be specified, separated by semicolon (;)
+
+    EM notes:
+    - Need ** for recursive matching e.g. **/*.html ?  What does git use if not fnmatch()?
+    - Need ! for full pattern negation ?
+    - Disable feature in configure.ac
+    - Need flex or lex?  Can probably use wcstok with separators ":,; "
+    - Need tests
+    - Need a way to report errors (and fail the mount)
+    - implement hooks
+      - cfs_flush triggers the PUT
+      - bogus content type configured in update_dir_cache
+      - content_type is special since it's tracked in the dir cache
+
 BUGS/SHORTCOMINGS:
 
     * rename() doesn't work on directories (and probably never will).

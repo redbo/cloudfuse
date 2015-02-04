@@ -10,3 +10,5 @@ cloudfuse
 # Ignore Eclipse files
 .cproject
 .project
+
+TAGS
