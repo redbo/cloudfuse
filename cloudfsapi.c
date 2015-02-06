@@ -84,8 +84,8 @@ static void return_connection(CURL *curl)
   pthread_mutex_unlock(&pool_mut);
 }
 
-static void add_header(curl_slist **headers, const char *name,
-                       const char *value)
+void add_header(curl_slist **headers, const char *name,
+		const char *value)
 {
   char x_header[MAX_HEADER_SIZE];
   snprintf(x_header, sizeof(x_header), "%s: %s", name, value);

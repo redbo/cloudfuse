@@ -1,0 +1,6 @@
+#!/bin/sh
+
+exec test/specrunner \
+'Content-Type: *.jpg image/jpeg, ! *.html text/plain, * text/html; Content-Disposition: * "attachment; filename=foo.txt"' \
+/bar.html
+

@@ -11,8 +11,10 @@ prefix = @prefix@
 exec_prefix = @exec_prefix@
 bindir = $(DESTDIR)$(exec_prefix)/bin
 
-SOURCES=cloudfsapi.c cloudfuse.c
-HEADERS=cloudfsapi.h
+SOURCES=cloudfsapi.c cloudfuse.c headerspec.c
+HEADERS=cloudfsapi.h headerspec.h
+
+TESTS=test/header01
 
 all: cloudfuse
 
@@ -27,6 +29,9 @@ $(bindir):
 
 cloudfuse: $(SOURCES) $(HEADERS)
 	$(CC) $(CFLAGS) -o cloudfuse $(SOURCES) $(LIBS)
+
+test/specrunner: $(SOURCES) $(HEADERS) test/specrunner.c
+	$(CC) $(CFLAGS) -o test/specrunner test/specrunner.c headerspec.c cloudfsapi.c $(LIBS)
 
 clean:
 	/bin/rm -f cloudfuse
@@ -52,3 +57,7 @@ Makefile: Makefile.in config.status
 config.status: configure
 	./config.status --recheck
 
+tests: test/specrunner
+	for test in $(TESTS); do \
+		$$test || exit 1; \
+	done

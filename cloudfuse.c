@@ -16,7 +16,7 @@
 #include <stddef.h>
 #include "cloudfsapi.h"
 #include "config.h"
-
+#include "headerspec.h"
 
 #define OPTION_SIZE 1024
 
