@@ -61,3 +61,6 @@ tests: test/specrunner
 	for test in $(TESTS); do \
 		$$test || exit 1; \
 	done
+
+etags:
+	etags $$(ls *.[hc]) /usr/include/fuse/fuse.h /usr/include/fuse/fuse_opt.h /usr/include/curl/curl.h

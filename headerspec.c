@@ -59,7 +59,7 @@ static int next_token(const char *spec /* in */, int *scanstart /* in/out */,
     while(1) {
       thisc++;
       if(*thisc==' ' || *thisc=='\t' || *thisc=='\n' || *thisc=='\r' || *thisc=='"'
-	 || *thisc==':' || *thisc==';' || *thisc==',' || *thisc=='!') break;
+	 || *thisc==':' || *thisc==';' || *thisc==',' || *thisc=='!' || *thisc==0) break;
     }
     
     *tokenlen = (thisc - spec) - *tokenstart;
@@ -80,12 +80,14 @@ static enum {
 
 int parse_spec(const char *spec, header_spec **output) {
 
+  printf("Entire spec is %s\n",spec);
+
   int scanstart = 0;
   int tokenstart, tokenlen;
 
   int state = EXPECT_EOF_OR_SEMI_OR_HEADERKEY;
   while(next_token(spec,&scanstart,&tokenstart,&tokenlen)) {
-    /* printf("Found token at %d len %d\n",tokenstart,tokenlen); */
+    printf("Found token at %d len %d\n",tokenstart,tokenlen);
 
     char fc = *(spec+tokenstart); // first char of token
 
@@ -116,6 +118,7 @@ int parse_spec(const char *spec, header_spec **output) {
 	speclist_tail = *output;
       }
 
+      printf("Allocated speclist\n");
       speclist_tail->header_key = headerkey;
       speclist_tail->matches = NULL;
       speclist_tail->next = NULL;
@@ -202,6 +205,7 @@ int parse_spec(const char *spec, header_spec **output) {
     return 0;
   }
 
+  printf("Parse completed successfully\n");
   return 1;
 }
 
@@ -227,18 +231,18 @@ void free_spec(header_spec *spec) {
   free_spec(next);
 }
 
-
-  
 int add_matching_headers(void (add_header_func)(struct curl_slist **headers, const char *name, const char *value),
 			 struct curl_slist **headers, header_spec *spec, const char *path) {
 
   header_spec *onespec = spec;
   while(onespec) {
 
+    printf("Testing one spec\n");
     match_spec *onematch = onespec->matches;
     while(onematch) {
 
       int result = fnmatch(onematch->pattern,path,0);
+      printf("Testing one match, path being %s, result was %d\n",path,result);
       if(!result) {
 	add_header_func(headers,onespec->header_key,onematch->header_value);
 	break;

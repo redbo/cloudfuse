@@ -433,6 +433,7 @@ static struct options {
     char region[OPTION_SIZE];
     char use_snet[OPTION_SIZE];
     char verify_ssl[OPTION_SIZE];
+    char header_spec[OPTION_SIZE*10];
 } options = {
     .username = "",
     .password = "",
@@ -442,6 +443,7 @@ static struct options {
     .region = "",
     .use_snet = "false",
     .verify_ssl = "true",
+    .header_spec = ""
 };
 
 int parse_option(void *data, const char *arg, int key, struct fuse_args *outargs)
@@ -454,7 +456,8 @@ int parse_option(void *data, const char *arg, int key, struct fuse_args *outargs
       sscanf(arg, " authurl = %[^\r\n ]", options.authurl) ||
       sscanf(arg, " region = %[^\r\n ]", options.region) ||
       sscanf(arg, " use_snet = %[^\r\n ]", options.use_snet) ||
-      sscanf(arg, " verify_ssl = %[^\r\n ]", options.verify_ssl))
+      sscanf(arg, " verify_ssl = %[^\r\n ]", options.verify_ssl) ||
+      sscanf(arg, " header_spec = %[^\r\n]", options.header_spec)) // Note spaces permitted
     return 0;
   if (!strcmp(arg, "-f") || !strcmp(arg, "-d") || !strcmp(arg, "debug"))
     cloudfs_debug(1);
@@ -494,11 +497,16 @@ int main(int argc, char **argv)
     fprintf(stderr, "  use_snet=[True to use Rackspace ServiceNet for connections]\n");
     fprintf(stderr, "  cache_timeout=[Seconds for directory caching, default 600]\n");
     fprintf(stderr, "  verify_ssl=[False to disable SSL cert verification]\n");
+    fprintf(stderr, "  header_spec=[Match specification for writing extra headers, see README]\n");
 
     return 1;
   }
 
   cloudfs_init();
+
+  header_spec *parsed = NULL;
+  parse_spec(options.header_spec, &parsed);
+  cloudfs_set_header_spec(parsed);
 
   cloudfs_verify_ssl(!strcasecmp(options.verify_ssl, "true"));
 
@@ -541,5 +549,7 @@ int main(int argc, char **argv)
 
   pthread_mutex_init(&dmut, NULL);
   return fuse_main(args.argc, args.argv, &cfs_oper, &options);
+
+  free_spec(parsed);
 }
 

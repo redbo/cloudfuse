@@ -17,6 +17,7 @@
 #include <libxml/xpathInternals.h>
 #include "cloudfsapi.h"
 #include "config.h"
+#include "headerspec.h"
 
 #define RHEL5_LIBCURL_VERSION 462597
 #define RHEL5_CERTIFICATE_FILE "/etc/pki/tls/certs/ca-bundle.crt"
@@ -31,6 +32,7 @@ static int curl_pool_count = 0;
 static int debug = 0;
 static int verify_ssl = 1;
 static int rhel5_mode = 0;
+static header_spec *hspec;
 
 #ifdef HAVE_OPENSSL
 #include <openssl/crypto.h>
@@ -87,6 +89,7 @@ static void return_connection(CURL *curl)
 void add_header(curl_slist **headers, const char *name,
 		const char *value)
 {
+  debugf("Adding the header %s: %s\n",name,value);
   char x_header[MAX_HEADER_SIZE];
   snprintf(x_header, sizeof(x_header), "%s: %s", name, value);
   *headers = curl_slist_append(*headers, x_header);
@@ -246,11 +249,15 @@ void cloudfs_init()
 
 int cloudfs_object_read_fp(const char *path, FILE *fp)
 {
+  debugf("In cloudfs_object_read_fp");
   fflush(fp);
   rewind(fp);
   char *encoded = curl_escape(path, 0);
-  int response = send_request("PUT", encoded, fp, NULL, NULL);
+  curl_slist *headers = NULL;
+  add_matching_headers(add_header,&headers,hspec,path);
+  int response = send_request("PUT", encoded, fp, NULL, headers);
   curl_free(encoded);
+  curl_slist_free_all(headers);
   return (response >= 200 && response < 300);
 }
 
@@ -435,6 +442,7 @@ int cloudfs_delete_object(const char *path)
 
 int cloudfs_copy_object(const char *src, const char *dst)
 {
+  debugf("In cloudfs_copy_object");
   char *dst_encoded = curl_escape(dst, 0);
   curl_slist *headers = NULL;
   add_header(&headers, "X-Copy-From", src);
@@ -495,6 +503,10 @@ void cloudfs_set_credentials(char *username, char *tenant, char *password,
   else
     reconnect_args.auth_version = 1;
   reconnect_args.use_snet = use_snet;
+}
+
+void cloudfs_set_header_spec(header_spec *spec) {
+  hspec = spec;
 }
 
 int cloudfs_connect()

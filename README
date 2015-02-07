@@ -112,16 +112,11 @@ HEADER SPECIFICATIONS:
     Multiple headers can be specified, separated by semicolon (;)
 
     EM notes:
-    - Need ** for recursive matching e.g. **/*.html ?  What does git use if not fnmatch()?
-    - Need ! for full pattern negation ?
-    - Disable feature in configure.ac
-    - Need flex or lex?  Can probably use wcstok with separators ":,; "
-    - Need tests
-    - Need a way to report errors (and fail the mount)
-    - implement hooks
-      - cfs_flush triggers the PUT
-      - bogus content type configured in update_dir_cache
-      - content_type is special since it's tracked in the dir cache
+    - TODO:
+      - more tests
+      - disable feature in configure
+      - factor out printf
+      - ensure bad parse fails the mount with good feedback
 
 BUGS/SHORTCOMINGS:
 
@@ -148,7 +143,7 @@ AWESOME CONTRIBUTORS:
     * David Brownlee                               https://github.com/abs0
     * Mike Lundy                                   https://github.com/novas0x2a
     * justinb                                      https://github.com/justinsb
-
+    * Erik Mackdanz                                http://mackdanz.net
 
 Thanks, and I hope you find it useful.
 

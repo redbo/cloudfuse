@@ -3,6 +3,7 @@
 
 #include <curl/curl.h>
 #include <curl/easy.h>
+#include "headerspec.h"
 
 #define BUFFER_INITIAL_SIZE 4096
 #define MAX_HEADER_SIZE 8192
@@ -38,6 +39,7 @@ off_t cloudfs_file_size(int fd);
 void cloudfs_debug(int dbg);
 void cloudfs_verify_ssl(int dbg);
 void cloudfs_free_dir_list(dir_entry *dir_list);
+void cloudfs_set_header_spec(header_spec *spec);
 void add_header(curl_slist **headers, const char *name,
 		const char *value);
 
