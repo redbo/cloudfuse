@@ -2,6 +2,7 @@
 #include <string.h>
 #include <fnmatch.h>
 #include "headerspec.h"
+#include "cloudfsapi.h"
 
 static int next_token(const char *spec /* in */, int *scanstart /* in/out */,
 		      int *tokenstart /* out */, int *tokenlen /* out */) {
@@ -80,14 +81,14 @@ static enum {
 
 int parse_spec(const char *spec, header_spec **output) {
 
-  printf("Entire spec is %s\n",spec);
+  debugf("Entire spec is %s\n",spec);
 
   int scanstart = 0;
   int tokenstart, tokenlen;
 
   int state = EXPECT_EOF_OR_SEMI_OR_HEADERKEY;
   while(next_token(spec,&scanstart,&tokenstart,&tokenlen)) {
-    printf("Found token at %d len %d\n",tokenstart,tokenlen);
+    debugf("Found token at %d len %d\n",tokenstart,tokenlen);
 
     char fc = *(spec+tokenstart); // first char of token
 
@@ -99,11 +100,11 @@ int parse_spec(const char *spec, header_spec **output) {
     case EXPECT_EOF_OR_SEMI_OR_HEADERKEY:
       if(';' == fc) continue;
       if(':'==fc || '!'==fc || ','==fc) {
-	printf("In state %d, encountered unexpected token at %d len %d\n",state,tokenstart,tokenlen);
+	debugf("In state %d, encountered unexpected token at %d len %d\n",state,tokenstart,tokenlen);
 	return 0;
       }
       headerkey = strndup(spec+tokenstart,tokenlen);
-      printf("Header key is %s\n",headerkey);
+      debugf("Header key is %s\n",headerkey);
 
       // Create a new tail for the linked list.
       speclist_tail = *output;
@@ -118,7 +119,7 @@ int parse_spec(const char *spec, header_spec **output) {
 	speclist_tail = *output;
       }
 
-      printf("Allocated speclist\n");
+      debugf("Allocated speclist\n");
       speclist_tail->header_key = headerkey;
       speclist_tail->matches = NULL;
       speclist_tail->next = NULL;
@@ -127,7 +128,7 @@ int parse_spec(const char *spec, header_spec **output) {
       break;
     case EXPECT_COLON:
       if(':'!=fc) {
-	printf("In state %d, encountered unexpected token at %d len %d\n",state,tokenstart,tokenlen);
+	debugf("In state %d, encountered unexpected token at %d len %d\n",state,tokenstart,tokenlen);
 	return 0;
       }
       state = EXPECT_NEGATE_OR_MATCH;
@@ -135,34 +136,34 @@ int parse_spec(const char *spec, header_spec **output) {
     case EXPECT_NEGATE_OR_MATCH:
       isnegated = 0;
       if('!'==fc) {
-	printf("Match is negated\n");
+	debugf("Match is negated\n");
 	isnegated = 1;
 	state = EXPECT_MATCH;
       } else if(':'==fc || ','==fc || ';'==fc) {
-	printf("In state %d, encountered unexpected token at %d len %d\n",state,tokenstart,tokenlen);
+	debugf("In state %d, encountered unexpected token at %d len %d\n",state,tokenstart,tokenlen);
 	return 0;
       } else {
 	pattern = strndup(spec+tokenstart,tokenlen);
-	printf("Pattern is %s\n",pattern);
+	debugf("Pattern is %s\n",pattern);
 	state = EXPECT_HEADER_VALUE;
       }
       break;
     case EXPECT_MATCH:
       if(':'==fc || '!'==fc || ','==fc || ';'==fc) {
-	printf("In state %d, encountered unexpected token at %d len %d\n",state,tokenstart,tokenlen);
+	debugf("In state %d, encountered unexpected token at %d len %d\n",state,tokenstart,tokenlen);
 	return 0;
       }
       pattern = strndup(spec+tokenstart,tokenlen);
-      printf("Pattern is %s\n",pattern);
+      debugf("Pattern is %s\n",pattern);
       state = EXPECT_HEADER_VALUE;
       break;
     case EXPECT_HEADER_VALUE:
       if(':'==fc || '!'==fc || ','==fc || ';'==fc) {
-	printf("In state %d, encountered unexpected token at %d len %d\n",state,tokenstart,tokenlen);
+	debugf("In state %d, encountered unexpected token at %d len %d\n",state,tokenstart,tokenlen);
 	return 0;
       }
       headervalue = strndup(spec+tokenstart,tokenlen);
-      printf("Header value is %s\n",headervalue);
+      debugf("Header value is %s\n",headervalue);
 
       match_spec *matchlist_tail;
       if(speclist_tail->matches) {
@@ -190,35 +191,35 @@ int parse_spec(const char *spec, header_spec **output) {
       } else if(';'==fc) {
 	state=EXPECT_EOF_OR_SEMI_OR_HEADERKEY;
       } else {
-	printf("In state %d, encountered unexpected token at %d len %d\n",state,tokenstart,tokenlen);
+	debugf("In state %d, encountered unexpected token at %d len %d\n",state,tokenstart,tokenlen);
 	return 0;
       }
       break;
     default:
-      printf("In unexpected state %d with token at %d len %d\n",state,tokenstart,tokenlen);
+      debugf("In unexpected state %d with token at %d len %d\n",state,tokenstart,tokenlen);
       return 0;
     }
   }
 
   if(state != EXPECT_EOF_OR_SEMI_OR_HEADERKEY && state != EXPECT_EOF_OR_COMMA_OR_SEMI) {
-    printf("Finished parse in unexpected state %d\n",state);
+    debugf("Finished parse in unexpected state %d\n",state);
     return 0;
   }
 
-  printf("Parse completed successfully\n");
+  debugf("Parse completed successfully\n");
   return 1;
 }
 
 void free_spec(header_spec *spec) {
   if(!spec) return;
 
-  /* printf("Freeing spec at %p\n",spec); */
+  /* debugf("Freeing spec at %p\n",spec); */
   free(spec->header_key);
 
   // free matches;
   match_spec *onematch = spec->matches;
   while(onematch) {
-    /* printf("Freeing match with value %s\n",onematch->header_value); */
+    /* debugf("Freeing match with value %s\n",onematch->header_value); */
     free(onematch->pattern);
     free(onematch->header_value);
     match_spec *nextmatch = onematch->next;
@@ -237,12 +238,12 @@ int add_matching_headers(void (add_header_func)(struct curl_slist **headers, con
   header_spec *onespec = spec;
   while(onespec) {
 
-    printf("Testing one spec\n");
+    debugf("Testing one spec\n");
     match_spec *onematch = onespec->matches;
     while(onematch) {
 
       int result = fnmatch(onematch->pattern,path,0);
-      printf("Testing one match, path being %s, result was %d\n",path,result);
+      debugf("Testing one match, path being %s, result was %d\n",path,result);
       if(!result) {
 	add_header_func(headers,onespec->header_key,onematch->header_value);
 	break;

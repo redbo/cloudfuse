@@ -100,7 +100,7 @@ HEADER SPECIFICATIONS:
     Content-Type header.  Rackspace's CloudFiles, for example, allows
     14 different headers for specifying access controls, content
     expiration, and content encoding.  Cloudfuse doesn't restrict what
-    headers can be specified, so use carefully.
+    headers can be specified, so use this feature carefully.
 
     The header value is set based on matching a path against a list of
     globs.  Here's an example which sets the Content-Type header:
@@ -111,11 +111,14 @@ HEADER SPECIFICATIONS:
     double quotes can be used to specify a pattern that has spaces.
     Multiple headers can be specified, separated by semicolon (;)
 
+    The path looks like an absolute path beginning at the mount point.
+    For example, a file "index.html" in bucket "foo" will result in
+    the string "/foo/index.html" being matched against the glob pattern.
+
     EM notes:
     - TODO:
       - more tests
       - disable feature in configure
-      - factor out printf
       - ensure bad parse fails the mount with good feedback
 
 BUGS/SHORTCOMINGS:
