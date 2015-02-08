@@ -1,6 +1,16 @@
 #!/bin/sh
 
-exec test/specrunner \
-'Content-Type: *.jpg image/jpeg, ! *.html text/plain, * text/html; Content-Disposition: * "attachment; filename=foo.txt"' \
-/bar.html
+set -e
+set -x
+
+result=$(mktemp)
+
+test/specrunner \
+'Content-Type: *.jpg image/jpeg, ! *.txt text/html; Content-Disposition: * "attachment; filename=foo.txt"' \
+/bar.html >$result
+
+grep "Content-Type: text/html" $result
+grep "Content-Disposition: attachment; filename=foo.txt" $result
+
+rm $result
 

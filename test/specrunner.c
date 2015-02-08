@@ -13,16 +13,17 @@ int main(int argc, char **argv) {
   char *path = argv[2];
 
   header_spec *parsed = NULL;
-  parse_spec(spec, &parsed);
-
-  if(parsed) printf("parsed has been assigned\n");
+  if(!parse_spec(spec, &parsed)) {
+    printf("Bad parse\n");
+    return 1;
+  }
 
   struct curl_slist *headers = NULL; //malloc(sizeof(struct curl_slist));
   add_matching_headers(add_header,&headers,parsed,path);
 
   struct curl_slist *onestr = headers;
   while(onestr) {
-    printf("Header is %s\n",onestr->data);
+    printf("%s\n",onestr->data);
     onestr = onestr->next;
   }
 

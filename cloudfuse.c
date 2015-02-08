@@ -505,7 +505,11 @@ int main(int argc, char **argv)
   cloudfs_init();
 
   header_spec *parsed = NULL;
-  parse_spec(options.header_spec, &parsed);
+  if(!parse_spec(options.header_spec, &parsed))
+  {
+    fprintf(stderr, "Could not parse header spec\n");
+    return 1;
+  }
   cloudfs_set_header_spec(parsed);
 
   cloudfs_verify_ssl(!strcasecmp(options.verify_ssl, "true"));

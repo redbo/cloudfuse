@@ -14,7 +14,10 @@ bindir = $(DESTDIR)$(exec_prefix)/bin
 SOURCES=cloudfsapi.c cloudfuse.c headerspec.c
 HEADERS=cloudfsapi.h headerspec.h
 
-TESTS=test/header01
+TESTS=test/header01 \
+	test/header02 \
+	test/header03 \
+	test/header04
 
 all: cloudfuse
 

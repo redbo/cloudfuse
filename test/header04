@@ -1,0 +1,11 @@
+#!/bin/sh
+
+set -e
+set -x
+
+# Ensure bad parse detected
+if test/specrunner 'Content-Disposition: bar' /foo; then
+    exit 1
+fi
+
+

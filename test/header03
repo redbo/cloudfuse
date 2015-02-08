@@ -1,0 +1,16 @@
+#!/bin/sh
+
+set -e
+set -x
+
+result=$(mktemp)
+
+test/specrunner \
+'Content-Type: *.css text/css, /blog/code/*/repository/raw/* text/plain, /blog/code/* text/html; Content-Disposition: * bar' \
+/foo >$result
+
+grep "Content-Disposition: bar" $result
+
+rm $result
+
+

@@ -117,9 +117,8 @@ HEADER SPECIFICATIONS:
 
     EM notes:
     - TODO:
-      - more tests
       - disable feature in configure
-      - ensure bad parse fails the mount with good feedback
+      - GNU brace style
 
 BUGS/SHORTCOMINGS:
 

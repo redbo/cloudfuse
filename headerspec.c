@@ -244,8 +244,11 @@ int add_matching_headers(void (add_header_func)(struct curl_slist **headers, con
 
       int result = fnmatch(onematch->pattern,path,0);
       debugf("Testing one match, path being %s, result was %d\n",path,result);
-      if(!result) {
+      if((result==0 && onematch->is_positive) || (result==FNM_NOMATCH && !onematch->is_positive)) {
 	add_header_func(headers,onespec->header_key,onematch->header_value);
+	break;
+      } else if(result!=0 && result != FNM_NOMATCH) {
+	debugf("fnmatch error\n");
 	break;
       }
       onematch = onematch->next;
