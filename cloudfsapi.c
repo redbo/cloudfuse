@@ -249,7 +249,6 @@ void cloudfs_init()
 
 int cloudfs_object_read_fp(const char *path, FILE *fp)
 {
-  debugf("In cloudfs_object_read_fp");
   fflush(fp);
   rewind(fp);
   char *encoded = curl_escape(path, 0);
@@ -442,7 +441,6 @@ int cloudfs_delete_object(const char *path)
 
 int cloudfs_copy_object(const char *src, const char *dst)
 {
-  debugf("In cloudfs_copy_object");
   char *dst_encoded = curl_escape(dst, 0);
   curl_slist *headers = NULL;
   add_header(&headers, "X-Copy-From", src);
@@ -505,7 +503,8 @@ void cloudfs_set_credentials(char *username, char *tenant, char *password,
   reconnect_args.use_snet = use_snet;
 }
 
-void cloudfs_set_header_spec(header_spec *spec) {
+void cloudfs_set_header_spec(header_spec *spec)
+{
   hspec = spec;
 }
 

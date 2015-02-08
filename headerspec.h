@@ -3,14 +3,16 @@
 
 #include <curl/curl.h>
 
-typedef struct match_spec {
+typedef struct match_spec
+{
   char *pattern;
   int is_positive;
   char *header_value;
   struct match_spec *next;
 } match_spec;
 
-typedef struct header_spec {
+typedef struct header_spec
+{
   char *header_key;
   match_spec *matches;
   struct header_spec *next;
