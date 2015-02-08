@@ -101,7 +101,7 @@ static enum
 int parse_spec(const char *spec, header_spec **output)
 {
 
-  debugf("Entire spec is %s\n",spec);
+  debugf("Entire spec is %s",spec);
 
   int scanstart = 0;
   int tokenstart, tokenlen;
@@ -109,7 +109,7 @@ int parse_spec(const char *spec, header_spec **output)
   int state = EXPECT_EOF_OR_SEMI_OR_HEADERKEY;
   while(next_token(spec,&scanstart,&tokenstart,&tokenlen))
   {
-    debugf("Found token at %d len %d\n",tokenstart,tokenlen);
+    debugf("Found token at %d len %d",tokenstart,tokenlen);
 
     char fc = *(spec+tokenstart); // first char of token
 
@@ -123,11 +123,11 @@ int parse_spec(const char *spec, header_spec **output)
       if(';' == fc) continue;
       if(':'==fc || '!'==fc || ','==fc)
       {
-	debugf("In state %d, encountered unexpected token at %d len %d\n",state,tokenstart,tokenlen);
+	debugf("In state %d, encountered unexpected token at %d len %d",state,tokenstart,tokenlen);
 	return 0;
       }
       headerkey = strndup(spec+tokenstart,tokenlen);
-      debugf("Header key is %s\n",headerkey);
+      debugf("Header key is %s",headerkey);
 
       // Create a new tail for the linked list.
       speclist_tail = *output;
@@ -146,7 +146,7 @@ int parse_spec(const char *spec, header_spec **output)
 	speclist_tail = *output;
       }
 
-      debugf("Allocated speclist\n");
+      debugf("Allocated speclist");
       speclist_tail->header_key = headerkey;
       speclist_tail->matches = NULL;
       speclist_tail->next = NULL;
@@ -156,7 +156,7 @@ int parse_spec(const char *spec, header_spec **output)
     case EXPECT_COLON:
       if(':'!=fc)
       {
-	debugf("In state %d, encountered unexpected token at %d len %d\n",state,tokenstart,tokenlen);
+	debugf("In state %d, encountered unexpected token at %d len %d",state,tokenstart,tokenlen);
 	return 0;
       }
       state = EXPECT_NEGATE_OR_MATCH;
@@ -165,40 +165,40 @@ int parse_spec(const char *spec, header_spec **output)
       isnegated = 0;
       if('!'==fc)
       {
-	debugf("Match is negated\n");
+	debugf("Match is negated");
 	isnegated = 1;
 	state = EXPECT_MATCH;
       }
       else if(':'==fc || ','==fc || ';'==fc)
       {
-	debugf("In state %d, encountered unexpected token at %d len %d\n",state,tokenstart,tokenlen);
+	debugf("In state %d, encountered unexpected token at %d len %d",state,tokenstart,tokenlen);
 	return 0;
       }
       else
       {
 	pattern = strndup(spec+tokenstart,tokenlen);
-	debugf("Pattern is %s\n",pattern);
+	debugf("Pattern is %s",pattern);
 	state = EXPECT_HEADER_VALUE;
       }
       break;
     case EXPECT_MATCH:
       if(':'==fc || '!'==fc || ','==fc || ';'==fc)
       {
-	debugf("In state %d, encountered unexpected token at %d len %d\n",state,tokenstart,tokenlen);
+	debugf("In state %d, encountered unexpected token at %d len %d",state,tokenstart,tokenlen);
 	return 0;
       }
       pattern = strndup(spec+tokenstart,tokenlen);
-      debugf("Pattern is %s\n",pattern);
+      debugf("Pattern is %s",pattern);
       state = EXPECT_HEADER_VALUE;
       break;
     case EXPECT_HEADER_VALUE:
       if(':'==fc || '!'==fc || ','==fc || ';'==fc)
       {
-	debugf("In state %d, encountered unexpected token at %d len %d\n",state,tokenstart,tokenlen);
+	debugf("In state %d, encountered unexpected token at %d len %d",state,tokenstart,tokenlen);
 	return 0;
       }
       headervalue = strndup(spec+tokenstart,tokenlen);
-      debugf("Header value is %s\n",headervalue);
+      debugf("Header value is %s",headervalue);
 
       match_spec *matchlist_tail;
       if(speclist_tail->matches)
@@ -235,23 +235,23 @@ int parse_spec(const char *spec, header_spec **output)
       }
       else
       {
-	debugf("In state %d, encountered unexpected token at %d len %d\n",state,tokenstart,tokenlen);
+	debugf("In state %d, encountered unexpected token at %d len %d",state,tokenstart,tokenlen);
 	return 0;
       }
       break;
     default:
-      debugf("In unexpected state %d with token at %d len %d\n",state,tokenstart,tokenlen);
+      debugf("In unexpected state %d with token at %d len %d",state,tokenstart,tokenlen);
       return 0;
     }
   }
 
   if(state != EXPECT_EOF_OR_SEMI_OR_HEADERKEY && state != EXPECT_EOF_OR_COMMA_OR_SEMI)
   {
-    debugf("Finished parse in unexpected state %d\n",state);
+    debugf("Finished parse in unexpected state %d",state);
     return 0;
   }
 
-  debugf("Parse completed successfully\n");
+  debugf("Parse completed successfully");
   return 1;
 }
 
@@ -259,14 +259,14 @@ void free_spec(header_spec *spec)
 {
   if(!spec) return;
 
-  /* debugf("Freeing spec at %p\n",spec); */
+  /* debugf("Freeing spec at %p",spec); */
   free(spec->header_key);
 
   // free matches;
   match_spec *onematch = spec->matches;
   while(onematch)
   {
-    /* debugf("Freeing match with value %s\n",onematch->header_value); */
+    /* debugf("Freeing match with value %s",onematch->header_value); */
     free(onematch->pattern);
     free(onematch->header_value);
     match_spec *nextmatch = onematch->next;
@@ -285,12 +285,12 @@ int add_matching_headers(struct curl_slist **headers, header_spec *spec, const c
   header_spec *onespec = spec;
   while(onespec)
   {
-    debugf("Testing one spec\n");
+    debugf("Testing one spec");
     match_spec *onematch = onespec->matches;
     while(onematch)
     {
       int result = fnmatch(onematch->pattern,path,0);
-      debugf("Testing one match, path being %s, result was %d\n",path,result);
+      debugf("Testing one match, path being %s, result was %d",path,result);
       if((result==0 && onematch->is_positive) || (result==FNM_NOMATCH && !onematch->is_positive))
       {
 	add_header(headers,onespec->header_key,onematch->header_value);
@@ -298,7 +298,7 @@ int add_matching_headers(struct curl_slist **headers, header_spec *spec, const c
       }
       else if(result!=0 && result != FNM_NOMATCH)
       {
-	debugf("fnmatch error\n");
+	debugf("fnmatch error");
 	break;
       }
       onematch = onematch->next;

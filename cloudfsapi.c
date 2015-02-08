@@ -89,7 +89,7 @@ static void return_connection(CURL *curl)
 void add_header(curl_slist **headers, const char *name,
 		const char *value)
 {
-  debugf("Adding the header %s: %s\n",name,value);
+  debugf("Adding the header %s: %s",name,value);
   char x_header[MAX_HEADER_SIZE];
   snprintf(x_header, sizeof(x_header), "%s: %s", name, value);
   *headers = curl_slist_append(*headers, x_header);
