@@ -253,7 +253,7 @@ int cloudfs_object_read_fp(const char *path, FILE *fp)
   rewind(fp);
   char *encoded = curl_escape(path, 0);
   curl_slist *headers = NULL;
-  add_matching_headers(add_header,&headers,hspec,path);
+  add_matching_headers(&headers,hspec,path);
   int response = send_request("PUT", encoded, fp, NULL, headers);
   curl_free(encoded);
   curl_slist_free_all(headers);

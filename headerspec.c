@@ -279,8 +279,7 @@ void free_spec(header_spec *spec)
   free_spec(next);
 }
 
-int add_matching_headers(void (add_header_func)(struct curl_slist **headers, const char *name, const char *value),
-			 struct curl_slist **headers, header_spec *spec, const char *path)
+int add_matching_headers(struct curl_slist **headers, header_spec *spec, const char *path)
 {
 
   header_spec *onespec = spec;
@@ -294,7 +293,7 @@ int add_matching_headers(void (add_header_func)(struct curl_slist **headers, con
       debugf("Testing one match, path being %s, result was %d\n",path,result);
       if((result==0 && onematch->is_positive) || (result==FNM_NOMATCH && !onematch->is_positive))
       {
-	add_header_func(headers,onespec->header_key,onematch->header_value);
+	add_header(headers,onespec->header_key,onematch->header_value);
 	break;
       }
       else if(result!=0 && result != FNM_NOMATCH)

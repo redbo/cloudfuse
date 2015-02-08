@@ -22,7 +22,7 @@ int main(int argc, char **argv)
   }
 
   struct curl_slist *headers = NULL;
-  add_matching_headers(add_header,&headers,parsed,path);
+  add_matching_headers(&headers,parsed,path);
 
   struct curl_slist *onestr = headers;
   while(onestr)

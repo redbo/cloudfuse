@@ -20,8 +20,7 @@ typedef struct header_spec
 
 int parse_spec(const char *spec, header_spec **output);
 
-int add_matching_headers(void (add_header_func)(struct curl_slist **headers, const char *name, const char *value),
-			 struct curl_slist **headers, header_spec *spec, const char *path);
+int add_matching_headers(struct curl_slist **headers, header_spec *spec, const char *path);
 
 void free_spec(header_spec *spec);
 
