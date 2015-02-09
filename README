@@ -105,16 +105,18 @@ HEADER SPECIFICATIONS:
     The header value is set based on matching a path against a list of
     globs.  The syntax:
 
-      HeaderKey: GlobMatch HeaderValue [, GlobMatch HeaderValue...] [; HeaderKey...]
+      HeaderKey: [!]GlobMatch HeaderValue [, [!]GlobMatch HeaderValue...] [; HeaderKey:...]
 
     Here's an example which sets the Content-Type header:
 
       Content-Type: /foobucket/*.html text/html, "/*/my dir/*.txt" text/plain;
 
     If no pattern matches, then the header is omitted.  Note that
-    double quotes can be used to specify a pattern that has spaces.
-    Multiple headers can be specified, separated by semicolon (;)
-    More examples are available in the test directory.
+    double quotes can be used to specify a pattern that has spaces.  A
+    match pattern preceded by ! is negated, so that the header is
+    applied when the path does not match the glob pattern.  Multiple
+    headers can be specified, separated by semicolon (;) More examples
+    are available in the test directory.
 
     See 'man 3 fnmatch' for accepted glob patterns.
 
