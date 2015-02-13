@@ -206,6 +206,130 @@ static size_t header_dispatch(void *ptr, size_t size, size_t nmemb, void *stream
   return size * nmemb;
 }
 
+static void prepare_list_request(const char *path, char *container, 
+                                        int *prefix_length, char *last)
+{
+  char object[MAX_PATH_SIZE] = "";
+
+  if (!strcmp(path, "") || !strcmp(path, "/"))
+  {
+    path = "";
+    sprintf(container, "/?format=xml");
+    if (!strcmp(path, ""))
+      strncat(container, last, strlen(last));
+  }
+  else
+  {
+    sscanf(path, "/%[^/]/%[^\n]", container, object);
+    
+    char *encoded_container = curl_escape(container, 0);
+    char *encoded_object = curl_escape(object, 0);
+
+    // The empty path doesn't get a trailing slash, everything else does
+    char *trailing_slash;
+    *prefix_length = strlen(object);
+    if (object[0] == 0)
+      trailing_slash = "";
+    else
+    {
+      trailing_slash = "/";
+      (*prefix_length)++;
+    }
+    
+    snprintf(container, MAX_PATH_SIZE * 3, "%s?format=xml&delimiter=/&prefix=%s%s",
+              encoded_container, encoded_object, trailing_slash);
+    strncat(container, last, strlen(last));
+
+    curl_free(encoded_container);
+    curl_free(encoded_object);
+  }
+}
+
+static int parse_list_response(const char *path, int prefix_length, 
+                                xmlParserCtxtPtr xmlctx, dir_entry **dir_list)
+{
+  char last_subdir[MAX_PATH_SIZE] = "";
+  xmlNode *onode = NULL, *anode = NULL, *text_node = NULL;
+
+  int entry_count = 0;
+
+  xmlNode *root_element = xmlDocGetRootElement(xmlctx->myDoc);
+  for (onode = root_element->children; onode; onode = onode->next)
+  {
+    if (onode->type != XML_ELEMENT_NODE) continue;
+
+    char is_object = !strcasecmp((const char *)onode->name, "object");
+    char is_container = !strcasecmp((const char *)onode->name, "container");
+    char is_subdir = !strcasecmp((const char *)onode->name, "subdir");
+
+    if (is_object || is_container || is_subdir)
+    {
+      entry_count++;
+
+      dir_entry *de = (dir_entry *)malloc(sizeof(dir_entry));
+      de->next = NULL;
+      de->size = 0;
+      de->last_modified = time(NULL);
+      if (is_container || is_subdir)
+        de->content_type = strdup("application/directory");
+      for (anode = onode->children; anode; anode = anode->next)
+      {
+        char *content = "<?!?>";
+        for (text_node = anode->children; text_node; text_node = text_node->next)
+          if (text_node->type == XML_TEXT_NODE)
+            content = (char *)text_node->content;
+        if (!strcasecmp((const char *)anode->name, "name"))
+        {
+          de->name = strdup(content + prefix_length);
+
+          // Remove trailing slash
+          char *slash = strrchr(de->name, '/');
+          if (slash && (0 == *(slash + 1)))
+            *slash = 0;
+
+          if (asprintf(&(de->full_name), "%s/%s", path, de->name) < 0)
+            de->full_name = NULL;
+        }
+        if (!strcasecmp((const char *)anode->name, "bytes"))
+          de->size = strtoll(content, NULL, 10);
+        if (!strcasecmp((const char *)anode->name, "content_type"))
+        {
+          de->content_type = strdup(content);
+          char *semicolon = strchr(de->content_type, ';');
+          if (semicolon)
+            *semicolon = '\0';
+        }
+        if (!strcasecmp((const char *)anode->name, "last_modified"))
+        {
+          struct tm last_modified;
+          strptime(content, "%FT%T", &last_modified);
+          de->last_modified = mktime(&last_modified);
+        }
+      }
+      de->isdir = de->content_type &&
+          ((strstr(de->content_type, "application/folder") != NULL) ||
+           (strstr(de->content_type, "application/directory") != NULL));
+      if (de->isdir)
+      {
+        if (!strncasecmp(de->name, last_subdir, sizeof(last_subdir)))
+        {
+          cloudfs_free_dir_list(de);
+          continue;
+        }
+        strncpy(last_subdir, de->name, sizeof(last_subdir));
+      }
+      de->next = *dir_list;
+      *dir_list = de;
+    }
+    else
+    {
+      debugf("unknown element: %s", onode->name);
+    }
+  }
+
+  return entry_count;
+}
+
 /*
  * Public interface
  */
@@ -287,128 +411,52 @@ int cloudfs_object_truncate(const char *path, off_t size)
 int cloudfs_list_directory(const char *path, dir_entry **dir_list)
 {
   char container[MAX_PATH_SIZE * 3] = "";
-  char object[MAX_PATH_SIZE] = "";
-  char last_subdir[MAX_PATH_SIZE] = "";
-  int prefix_length = 0;
+  char *marker;
+  char last[NAME_MAX + 25] = "";
+
+  xmlParserCtxtPtr xmlctx;
+
   int response = 0;
   int retval = 0;
+  int prefix_length = 0;
+  int is_last = 0;
   int entry_count = 0;
 
   *dir_list = NULL;
-  xmlNode *onode = NULL, *anode = NULL, *text_node = NULL;
-  xmlParserCtxtPtr xmlctx = xmlCreatePushParserCtxt(NULL, NULL, "", 0, NULL);
-  if (!strcmp(path, "") || !strcmp(path, "/"))
-  {
-    path = "";
-    strncpy(container, "/?format=xml", sizeof(container));
-  }
-  else
-  {
-    sscanf(path, "/%[^/]/%[^\n]", container, object);
-    char *encoded_container = curl_escape(container, 0);
-    char *encoded_object = curl_escape(object, 0);
 
-    // The empty path doesn't get a trailing slash, everything else does
-    char *trailing_slash;
-    prefix_length = strlen(object);
-    if (object[0] == 0)
-      trailing_slash = "";
+  while (is_last == 0) 
+  { 
+    xmlctx = xmlCreatePushParserCtxt(NULL, NULL, "", 0, NULL);
+
+    if (marker != NULL)
+        snprintf(last, sizeof(last), "&marker=%s&limit=%d", marker, DIR_LIST_LIMIT);
     else
-    {
-      trailing_slash = "/";
-      prefix_length++;
-    }
+        snprintf(last, sizeof(last), "&limit=%d", DIR_LIST_LIMIT);
 
-    snprintf(container, sizeof(container), "%s?format=xml&delimiter=/&prefix=%s%s",
-              encoded_container, encoded_object, trailing_slash);
-    curl_free(encoded_container);
-    curl_free(encoded_object);
+    prepare_list_request(path, container, &prefix_length, last);
+    response = send_request("GET", container, NULL, xmlctx, NULL);
+  
+    xmlParseChunk(xmlctx, "", 0, 1);
+    if (xmlctx->wellFormed && response >= 200 && response < 300)
+    {
+      entry_count = parse_list_response(path, prefix_length, xmlctx, dir_list);
+      if (entry_count < DIR_LIST_LIMIT)
+        is_last = 1;
+      else if (entry_count >= DIR_LIST_LIMIT)
+      { 
+         dir_entry *de = *dir_list;
+         marker = de->name;
+      }
+      
+      retval = 1;
+    } 
+    else 
+      is_last = 1;
+
+    xmlFreeDoc(xmlctx->myDoc);
+    xmlFreeParserCtxt(xmlctx);
   }
 
-  response = send_request("GET", container, NULL, xmlctx, NULL);
-  xmlParseChunk(xmlctx, "", 0, 1);
-  if (xmlctx->wellFormed && response >= 200 && response < 300)
-  {
-    xmlNode *root_element = xmlDocGetRootElement(xmlctx->myDoc);
-    for (onode = root_element->children; onode; onode = onode->next)
-    {
-      if (onode->type != XML_ELEMENT_NODE) continue;
-
-      char is_object = !strcasecmp((const char *)onode->name, "object");
-      char is_container = !strcasecmp((const char *)onode->name, "container");
-      char is_subdir = !strcasecmp((const char *)onode->name, "subdir");
-
-      if (is_object || is_container || is_subdir)
-      {
-        entry_count++;
-
-        dir_entry *de = (dir_entry *)malloc(sizeof(dir_entry));
-        de->next = NULL;
-        de->size = 0;
-        de->last_modified = time(NULL);
-        if (is_container || is_subdir)
-          de->content_type = strdup("application/directory");
-        for (anode = onode->children; anode; anode = anode->next)
-        {
-          char *content = "<?!?>";
-          for (text_node = anode->children; text_node; text_node = text_node->next)
-            if (text_node->type == XML_TEXT_NODE)
-              content = (char *)text_node->content;
-          if (!strcasecmp((const char *)anode->name, "name"))
-          {
-            de->name = strdup(content + prefix_length);
-
-            // Remove trailing slash
-            char *slash = strrchr(de->name, '/');
-            if (slash && (0 == *(slash + 1)))
-              *slash = 0;
-
-            if (asprintf(&(de->full_name), "%s/%s", path, de->name) < 0)
-              de->full_name = NULL;
-          }
-          if (!strcasecmp((const char *)anode->name, "bytes"))
-            de->size = strtoll(content, NULL, 10);
-          if (!strcasecmp((const char *)anode->name, "content_type"))
-          {
-            de->content_type = strdup(content);
-            char *semicolon = strchr(de->content_type, ';');
-            if (semicolon)
-              *semicolon = '\0';
-          }
-          if (!strcasecmp((const char *)anode->name, "last_modified"))
-          {
-            struct tm last_modified;
-            strptime(content, "%FT%T", &last_modified);
-            de->last_modified = mktime(&last_modified);
-          }
-        }
-        de->isdir = de->content_type &&
-            ((strstr(de->content_type, "application/folder") != NULL) ||
-             (strstr(de->content_type, "application/directory") != NULL));
-        if (de->isdir)
-        {
-          if (!strncasecmp(de->name, last_subdir, sizeof(last_subdir)))
-          {
-            cloudfs_free_dir_list(de);
-            continue;
-          }
-          strncpy(last_subdir, de->name, sizeof(last_subdir));
-        }
-        de->next = *dir_list;
-        *dir_list = de;
-      }
-      else
-      {
-        debugf("unknown element: %s", onode->name);
-      }
-    }
-    retval = 1;
-  }
-
-  debugf("entry count: %d", entry_count);
-
-  xmlFreeDoc(xmlctx->myDoc);
-  xmlFreeParserCtxt(xmlctx);
   return retval;
 }
 
