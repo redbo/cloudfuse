@@ -113,6 +113,7 @@ static void update_dir_cache(const char *path, off_t size, int isdir)
       de->size = size;
       de->isdir = isdir;
       de->name = strdup(&path[strlen(cw->path)+1]);
+      de->marker = strdup(de->name);
       de->full_name = strdup(path);
       de->content_type = strdup(isdir ? "application/directory" : "application/octet-stream");
       de->last_modified = time(NULL);
@@ -270,9 +271,9 @@ static int cfs_open(const char *path, struct fuse_file_info *info)
 {
   FILE *temp_file = tmpfile();
   dir_entry *de = path_info(path);
-  if (!(info->flags & O_WRONLY))
+  if (!(info->flags & O_TRUNC))
   {
-    if (!cloudfs_object_write_fp(path, temp_file))
+    if (!cloudfs_object_write_fp(path, temp_file) && !(info->flags & O_CREAT))
     {
       fclose(temp_file);
       return -ENOENT;
@@ -369,16 +370,11 @@ static int cfs_truncate(const char *path, off_t size)
 
 static int cfs_statfs(const char *path, struct statvfs *stat)
 {
-  stat->f_bsize = 4096;
-  stat->f_frsize = 4096;
-  stat->f_blocks = INT_MAX;
-  stat->f_bfree = stat->f_blocks;
-  stat->f_bavail = stat->f_blocks;
-  stat->f_files = INT_MAX;
-  stat->f_ffree = INT_MAX;
-  stat->f_favail = INT_MAX;
-  stat->f_namemax = INT_MAX;
-  return 0;
+  if (cloudfs_statfs(path, stat)){
+    return 0;
+  }
+  else
+    return -EIO;
 }
 
 static int cfs_chown(const char *path, uid_t uid, gid_t gid)
@@ -403,6 +399,22 @@ static int cfs_rename(const char *src, const char *dst)
     /* FIXME this isn't quite right as doesn't preserve last modified */
     update_dir_cache(dst, src_de->size, 0);
     return cfs_unlink(src);
+  }
+  return -EIO;
+}
+
+static int cfs_link(const char *src, const char *dst)
+{
+  dir_entry *src_de = path_info(src);
+  if (!src_de)
+      return -ENOENT;
+  if (src_de->isdir)
+    return -EISDIR;
+  if (cloudfs_copy_object(src, dst))
+  {
+    /* FIXME this isn't quite right as doesn't preserve last modified */
+    update_dir_cache(dst, src_de->size, 0);
+    return 0;
   }
   return -EIO;
 }
@@ -536,6 +548,7 @@ int main(int argc, char **argv)
     .chmod = cfs_chmod,
     .chown = cfs_chown,
     .rename = cfs_rename,
+    .link = cfs_link,
     .init = cfs_init,
   };
 

@@ -17,20 +17,35 @@
 #include <libxml/xpathInternals.h>
 #include "cloudfsapi.h"
 #include "config.h"
+#include <fuse.h>
 
 #define RHEL5_LIBCURL_VERSION 462597
 #define RHEL5_CERTIFICATE_FILE "/etc/pki/tls/certs/ca-bundle.crt"
 
-#define REQUEST_RETRIES 4
+#define REQUEST_RETRIES 24
+
+// defined by Rackspace
+#define MAX_RESULTS_PER_REQUEST 10000
 
 static char storage_url[MAX_URL_SIZE];
 static char storage_token[MAX_HEADER_SIZE];
 static pthread_mutex_t pool_mut;
-static CURL *curl_pool[1024];
+static CURL *curl_pool[4096];
 static int curl_pool_count = 0;
 static int debug = 0;
 static int verify_ssl = 1;
 static int rhel5_mode = 0;
+static struct statvfs statcache = {
+  .f_bsize = 1,
+  .f_frsize = 1,
+  .f_blocks = INT_MAX,
+  .f_bfree = INT_MAX,
+  .f_bavail = INT_MAX,
+  .f_files = INT_MAX,
+  .f_ffree = INT_MAX,
+  .f_favail = INT_MAX,
+  .f_namemax = INT_MAX
+};
 
 #ifdef HAVE_OPENSSL
 #include <openssl/crypto.h>
@@ -90,6 +105,30 @@ static void add_header(curl_slist **headers, const char *name,
   char x_header[MAX_HEADER_SIZE];
   snprintf(x_header, sizeof(x_header), "%s: %s", name, value);
   *headers = curl_slist_append(*headers, x_header);
+}
+
+static size_t header_dispatch(void *ptr, size_t size, size_t nmemb, void *stream)
+{
+  debugf("Dispatching response headers");
+  char *header = (char *)alloca(size * nmemb + 1);
+  char *head = (char *)alloca(size * nmemb + 1);
+  char *value = (char *)alloca(size * nmemb + 1);
+  memcpy(header, (char *)ptr, size * nmemb);
+  header[size * nmemb] = '\0';
+  if (sscanf(header, "%[^:]: %[^\r\n]", head, value) == 2)
+  {
+    if (!strncasecmp(head, "x-auth-token", size * nmemb))
+      strncpy(storage_token, value, sizeof(storage_token));
+    if (!strncasecmp(head, "x-storage-url", size * nmemb))
+      strncpy(storage_url, value, sizeof(storage_url));
+    if (!strncasecmp(head, "x-account-meta-quota", size * nmemb))
+      statcache.f_blocks = strtoul(value, NULL, 10);
+    if (!strncasecmp(head, "x-account-bytes-used", size * nmemb))
+      statcache.f_bfree = statcache.f_bavail = statcache.f_blocks - strtoul(value, NULL, 10);
+    if (!strncasecmp(head, "x-account-object-count", size * nmemb))
+      statcache.f_ffree = statcache.f_bavail = statcache.f_files - strtoul(value, NULL, 10);
+  }
+  return size * nmemb;
 }
 
 static int send_request(char *method, const char *path, FILE *fp,
@@ -164,7 +203,10 @@ static int send_request(char *method, const char *path, FILE *fp,
       }
     }
     else
+    {
       curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, method);
+      curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, &header_dispatch);
+    }
     /* add the headers from extra_headers if any */
     curl_slist *extra;
     for (extra = extra_headers; extra; extra = extra->next)
@@ -180,6 +222,8 @@ static int send_request(char *method, const char *path, FILE *fp,
     return_connection(curl);
     if (response >= 200 && response < 400)
       return response;
+    if (response == 404 && !strcasecmp(method, "DELETE"))
+      return response;
     sleep(8 << tries); // backoff
     if (response == 401 && !cloudfs_connect()) // re-authenticate on 401s
       return response;
@@ -187,23 +231,6 @@ static int send_request(char *method, const char *path, FILE *fp,
       xmlCtxtResetPush(xmlctx, NULL, 0, NULL, NULL);
   }
   return response;
-}
-
-static size_t header_dispatch(void *ptr, size_t size, size_t nmemb, void *stream)
-{
-  char *header = (char *)alloca(size * nmemb + 1);
-  char *head = (char *)alloca(size * nmemb + 1);
-  char *value = (char *)alloca(size * nmemb + 1);
-  memcpy(header, (char *)ptr, size * nmemb);
-  header[size * nmemb] = '\0';
-  if (sscanf(header, "%[^:]: %[^\r\n]", head, value) == 2)
-  {
-    if (!strncasecmp(head, "x-auth-token", size * nmemb))
-      strncpy(storage_token, value, sizeof(storage_token));
-    if (!strncasecmp(head, "x-storage-url", size * nmemb))
-      strncpy(storage_url, value, sizeof(storage_url));
-  }
-  return size * nmemb;
 }
 
 /*
@@ -284,17 +311,16 @@ int cloudfs_object_truncate(const char *path, off_t size)
   return (response >= 200 && response < 300);
 }
 
-int cloudfs_list_directory(const char *path, dir_entry **dir_list)
+int cloudfs_list_directory_internal(const char *path, dir_entry **dir_list)
 {
   char container[MAX_PATH_SIZE * 3] = "";
   char object[MAX_PATH_SIZE] = "";
   char last_subdir[MAX_PATH_SIZE] = "";
   int prefix_length = 0;
   int response = 0;
-  int retval = 0;
+  int retval = -1;
   int entry_count = 0;
 
-  *dir_list = NULL;
   xmlNode *onode = NULL, *anode = NULL, *text_node = NULL;
   xmlParserCtxtPtr xmlctx = xmlCreatePushParserCtxt(NULL, NULL, "", 0, NULL);
   if (!strcmp(path, "") || !strcmp(path, "/"))
@@ -325,10 +351,18 @@ int cloudfs_list_directory(const char *path, dir_entry **dir_list)
     curl_free(encoded_object);
   }
 
+  if (*dir_list != NULL) {
+    char *encoded_marker = curl_escape((*dir_list)->marker, 0);
+    strcat(container, "&marker=");
+    strcat(container, encoded_marker);
+    curl_free(encoded_marker);
+  }
+  printf("%s\n", container);
   response = send_request("GET", container, NULL, xmlctx, NULL);
   xmlParseChunk(xmlctx, "", 0, 1);
   if (xmlctx->wellFormed && response >= 200 && response < 300)
   {
+    retval = 0;
     xmlNode *root_element = xmlDocGetRootElement(xmlctx->myDoc);
     for (onode = root_element->children; onode; onode = onode->next)
     {
@@ -363,6 +397,7 @@ int cloudfs_list_directory(const char *path, dir_entry **dir_list)
             if (slash && (0 == *(slash + 1)))
               *slash = 0;
 
+            de->marker = strdup(de->name);
             if (asprintf(&(de->full_name), "%s/%s", path, de->name) < 0)
               de->full_name = NULL;
           }
@@ -377,7 +412,7 @@ int cloudfs_list_directory(const char *path, dir_entry **dir_list)
           }
           if (!strcasecmp((const char *)anode->name, "last_modified"))
           {
-            struct tm last_modified;
+            struct tm last_modified = {0};
             strptime(content, "%FT%T", &last_modified);
             de->last_modified = mktime(&last_modified);
           }
@@ -396,13 +431,13 @@ int cloudfs_list_directory(const char *path, dir_entry **dir_list)
         }
         de->next = *dir_list;
         *dir_list = de;
+	retval++;
       }
       else
       {
         debugf("unknown element: %s", onode->name);
       }
     }
-    retval = 1;
   }
 
   debugf("entry count: %d", entry_count);
@@ -412,16 +447,37 @@ int cloudfs_list_directory(const char *path, dir_entry **dir_list)
   return retval;
 }
 
+int cloudfs_list_directory(const char *path, dir_entry **dir_list)
+{
+  int retval;
+  *dir_list = NULL;
+
+  do {
+    retval = cloudfs_list_directory_internal(path, dir_list);
+    debugf("cloudfs_list_directory_internal retval: %d\n", retval);
+  } while(retval >= MAX_RESULTS_PER_REQUEST);
+
+  return retval == -1 ? 0 : 1;
+}
+
 void cloudfs_free_dir_list(dir_entry *dir_list)
 {
   while (dir_list)
   {
     dir_entry *de = dir_list;
     dir_list = dir_list->next;
-    free(de->name);
-    free(de->full_name);
-    free(de->content_type);
-    free(de);
+    if (NULL != de){
+        free(de->name);
+        de->name = NULL;
+        free(de->marker);
+        de->marker = NULL;
+        free(de->full_name);
+        de->full_name = NULL;
+        free(de->content_type);
+        de->content_type = NULL;
+        free(de);
+        de = NULL;
+    }
   }
 }
 
@@ -430,7 +486,7 @@ int cloudfs_delete_object(const char *path)
   char *encoded = curl_escape(path, 0);
   int response = send_request("DELETE", encoded, NULL, NULL, NULL);
   curl_free(encoded);
-  return (response >= 200 && response < 300);
+  return ((response >= 200 && response < 300) || response == 404);
 }
 
 int cloudfs_copy_object(const char *src, const char *dst)
@@ -442,6 +498,16 @@ int cloudfs_copy_object(const char *src, const char *dst)
   int response = send_request("PUT", dst_encoded, NULL, NULL, headers);
   curl_free(dst_encoded);
   curl_slist_free_all(headers);
+  return (response >= 200 && response < 300);
+}
+
+int cloudfs_statfs(const char *path, struct statvfs *stat)
+{
+  int response = send_request("HEAD", "/", NULL, NULL, NULL);
+
+  debugf("Assigning statvfs values from cache.");
+  *stat = statcache;
+
   return (response >= 200 && response < 300);
 }
 

@@ -104,8 +104,9 @@ BUGS/SHORTCOMINGS:
       containers in cloudfiles.
     * Directory entries are created as empty files with the content-type
       "application/directory".
-    * Cloud Files limits container and object listings to 10,000 items.
-      cloudfuse won't list more than that many files in a single directory.
+    * Cloud Files container and object listings no more limited to 10,000 items.
+    * Hard-link calls are mapped to Swift Copy Object requests:
+      http://docs.openstack.org/api/openstack-object-storage/1.0/content/copy-object.html
 
 
 AWESOME CONTRIBUTORS:
@@ -118,6 +119,8 @@ AWESOME CONTRIBUTORS:
     * David Brownlee                               https://github.com/abs0
     * Mike Lundy                                   https://github.com/novas0x2a
     * justinb                                      https://github.com/justinsb
+    * Am1GO                                        https://github.com/Am1GO
+    * nashyeung                                    https://github.com/nashyeung
 
 
 Thanks, and I hope you find it useful.
