@@ -15,6 +15,7 @@
 #include <libxml/tree.h>
 #include <libxml/xpath.h>
 #include <libxml/xpathInternals.h>
+#include <json-c/json.h>
 #include "cloudfsapi.h"
 #include "config.h"
 
@@ -31,6 +32,17 @@ static int curl_pool_count = 0;
 static int debug = 0;
 static int verify_ssl = 1;
 static int rhel5_mode = 0;
+
+struct json_payload {
+  char *data;
+  size_t size;
+};
+
+struct json_element {
+  const char *e_key;
+  const char *e_subkey;
+  const char *e_subval;
+};
 
 #ifdef HAVE_OPENSSL
 #include <openssl/crypto.h>
@@ -49,6 +61,47 @@ static unsigned long thread_id()
 }
 #endif
 
+static json_object *get_element_from_json(struct json_element *path, json_object *root)
+{
+  json_object *this_obj = root, *lookup_obj = NULL;
+  int i = 0, j, len;
+
+  while (path[i].e_key)
+  {
+    if (json_object_object_get_ex(this_obj, path[i].e_key, &lookup_obj) == 0)
+    {
+      debugf("failed to find json element %s", path[i].e_key);
+      return NULL;
+    }
+    if (path[i].e_subkey && path[i].e_subval) // lookup_obj is an array
+    {
+      len = json_object_array_length(lookup_obj);
+      for (j=0; j<len; ++j)
+      {
+        json_object *child, *sub = json_object_array_get_idx(lookup_obj, j);
+	if (json_object_object_get_ex(sub, path[i].e_subkey, &child) == 0)
+        {
+          debugf("failed to find json element %s", path[i].e_subkey);
+          return NULL;
+        }
+        else if (!strcasecmp(path[i].e_subval, json_object_get_string(child)) ||
+                 path[i].e_subval[0] == '\0') // special case to guess region
+        {
+          this_obj = sub;
+          i++;
+          break;
+        }
+      }
+    }
+    else
+    {
+      this_obj = lookup_obj;
+      i++;
+    }
+  }
+  return this_obj;
+}
+
 static void rewrite_url_snet(char *url)
 {
   char protocol[MAX_URL_SIZE];
@@ -62,6 +115,18 @@ static size_t xml_dispatch(void *ptr, size_t size, size_t nmemb, void *stream)
 {
   xmlParseChunk((xmlParserCtxtPtr)stream, (char *)ptr, size * nmemb, 0);
   return size * nmemb;
+}
+
+static size_t json_dispatch(void *ptr, size_t size, size_t nmemb, void *stream)
+{
+  struct json_payload *payload = (struct json_payload *) stream;
+  size_t len = size * nmemb;
+
+  payload->data = (char *) realloc(payload->data, payload->size+len+1);
+  memcpy(&(payload->data[payload->size]), ptr, len);
+  payload->size += len;
+  payload->data[payload->size] = '\0';
+  return len;
 }
 
 static CURL *get_connection(const char *path)
@@ -198,7 +263,8 @@ static size_t header_dispatch(void *ptr, size_t size, size_t nmemb, void *stream
   header[size * nmemb] = '\0';
   if (sscanf(header, "%[^:]: %[^\r\n]", head, value) == 2)
   {
-    if (!strncasecmp(head, "x-auth-token", size * nmemb))
+    if (!strncasecmp(head, "x-auth-token", size * nmemb) ||
+        !strncasecmp(head, "x-subject-token", size * nmemb))
       strncpy(storage_token, value, sizeof(storage_token));
     if (!strncasecmp(head, "x-storage-url", size * nmemb))
       strncpy(storage_url, value, sizeof(storage_url));
@@ -492,6 +558,14 @@ void cloudfs_set_credentials(char *username, char *tenant, char *password,
     else if (!strcmp(authurl + strlen(authurl) - 6, "/v2.0/"))
       strcat(reconnect_args.authurl, "tokens");
   }
+  else if (strstr(authurl, "v3"))
+  {
+    reconnect_args.auth_version = 3;
+    if (!strcmp(authurl + strlen(authurl) - 3, "/v3"))
+      strcat(reconnect_args.authurl, "/auth/tokens");
+    else if (!strcmp(authurl + strlen(authurl) - 4, "/v3/"))
+      strcat(reconnect_args.authurl, "auth/tokens");
+  }
   else
     reconnect_args.auth_version = 1;
   reconnect_args.use_snet = use_snet;
@@ -505,6 +579,9 @@ int cloudfs_connect()
   char postdata[8192] = "";
   xmlNode *top_node = NULL, *service_node = NULL, *endpoint_node = NULL;
   xmlParserCtxtPtr xmlctx = NULL;
+  enum json_tokener_error json_err = json_tokener_success;
+  struct json_payload *json_payload = NULL;
+  json_object *json = NULL;
 
   pthread_mutex_lock(&pool_mut);
 
@@ -544,6 +621,36 @@ int cloudfs_connect()
     xmlctx = xmlCreatePushParserCtxt(NULL, NULL, "", 0, NULL);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, xmlctx);
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, &xml_dispatch);
+  }
+  else if (reconnect_args.auth_version == 3)
+  {
+    if (reconnect_args.username[0] && reconnect_args.tenant[0] && reconnect_args.password[0])
+    {
+      snprintf(postdata, sizeof(postdata), "{\"auth\":{\"identity\":{"
+          "\"methods\":[\"password\"],\"password\":{\"user\":{\"id\":"
+          "\"%s\",\"password\":\"%s\"}},\"scope\":{\"project\":{\"id"
+          "\":\"%s\"}}}}}", reconnect_args.username, reconnect_args.password,
+          reconnect_args.tenant);
+    }
+    else if (reconnect_args.username[0] && reconnect_args.password[0])
+    {
+      snprintf(postdata, sizeof(postdata), "{\"auth\":{\"identity\":{"
+          "\"methods\":[\"password\"],\"password\":{\"user\":{\"id\":"
+          "\"%s\",\"password\":\"%s\"}}}}}", reconnect_args.username,
+          reconnect_args.password);
+    }
+    debugf("%s", postdata);
+    add_header(&headers, "Content-Type", "application/json");
+
+    curl_easy_setopt(curl, CURLOPT_POST, 1);
+    curl_easy_setopt(curl, CURLOPT_POSTFIELDS, postdata);
+    curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, strlen(postdata));
+
+    curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, &header_dispatch);
+
+    json_payload = (struct json_payload *) calloc(1, sizeof(struct json_payload));
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, json_payload);
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, &json_dispatch);
   }
   else
   {
@@ -633,6 +740,36 @@ int cloudfs_connect()
       debugf("storage_token: %s", storage_token);
     }
     xmlFreeParserCtxt(xmlctx);
+  }
+  else if (reconnect_args.auth_version == 3)
+  {
+    if (json_payload)
+    {
+      json = json_tokener_parse_verbose(json_payload->data, &json_err);
+      free(json_payload->data);
+      free(json_payload);
+      if (json_err != json_tokener_success)
+        debugf("failed parsing the JSON stream");
+      else
+      {
+        struct json_element path[] = {
+          { .e_key="token" },
+          { .e_key="catalog", .e_subkey="type", .e_subval="object-store" },
+          { .e_key="endpoints", .e_subkey="region_id", .e_subval=reconnect_args.region },
+          { .e_key=NULL }
+        };
+        json_object *ep = get_element_from_json(path, json);
+        if (ep)
+        {
+          json_object *url = NULL;
+          json_object_object_get_ex(ep, "url", &url);
+          strncpy(storage_url, json_object_get_string(url), sizeof(storage_url));
+        }
+      }
+      json_object_put(json);
+      debugf("storage_url: %s", storage_url);
+      debugf("storage_token: %s", storage_token);
+    }
   }
   else if (reconnect_args.use_snet && storage_url[0])
     rewrite_url_snet(storage_url);
