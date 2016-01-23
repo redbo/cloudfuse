@@ -61,16 +61,20 @@ static unsigned long thread_id()
 }
 #endif
 
-static json_object *get_element_from_json(struct json_element *path, json_object *root)
+static json_object **get_elements_from_json(struct json_element *path, json_object *root)
 {
   json_object *this_obj = root, *lookup_obj = NULL;
+  json_object **elements;
   int i = 0, j, len;
+  int eid = 0, max_elements = 16;
 
+  elements = (json_object **) calloc(max_elements+1, sizeof(json_object *));
   while (path[i].e_key)
   {
     if (json_object_object_get_ex(this_obj, path[i].e_key, &lookup_obj) == 0)
     {
       debugf("failed to find json element %s", path[i].e_key);
+      free(elements);
       return NULL;
     }
     if (path[i].e_subkey && path[i].e_subval) // lookup_obj is an array
@@ -82,12 +86,18 @@ static json_object *get_element_from_json(struct json_element *path, json_object
 	if (json_object_object_get_ex(sub, path[i].e_subkey, &child) == 0)
         {
           debugf("failed to find json element %s", path[i].e_subkey);
+          free(elements);
           return NULL;
         }
         else if (!strcasecmp(path[i].e_subval, json_object_get_string(child)) ||
                  path[i].e_subval[0] == '\0') // special case to guess region
         {
           this_obj = sub;
+          if (!path[i+1].e_key && eid < max_elements && j+1 < len)
+          {
+            elements[eid++] = sub;
+            continue;
+          }
           i++;
           break;
         }
@@ -99,7 +109,9 @@ static json_object *get_element_from_json(struct json_element *path, json_object
       i++;
     }
   }
-  return this_obj;
+  if (eid == 0)
+    elements[0] = lookup_obj;
+  return elements;
 }
 
 static void rewrite_url_snet(char *url)
@@ -758,12 +770,26 @@ int cloudfs_connect()
           { .e_key="endpoints", .e_subkey="region_id", .e_subval=reconnect_args.region },
           { .e_key=NULL }
         };
-        json_object *ep = get_element_from_json(path, json);
+        json_object **ep = get_elements_from_json(path, json);
         if (ep)
         {
-          json_object *url = NULL;
-          json_object_object_get_ex(ep, "url", &url);
-          strncpy(storage_url, json_object_get_string(url), sizeof(storage_url));
+          int ep_id;
+          char is_public, is_internal;
+          char wants_internal = reconnect_args.use_snet;
+          for (ep_id=0; ep[ep_id]; ++ep_id)
+          {
+            json_object *interface = NULL, *url = NULL;
+            json_object_object_get_ex(ep[ep_id], "url", &url);
+            json_object_object_get_ex(ep[ep_id], "interface", &interface);
+            is_internal = strcasecmp(json_object_get_string(interface), "internal") == 0;
+            is_public = is_internal ? 0 : strcasecmp(json_object_get_string(interface), "public") == 0;
+            if ((wants_internal && is_internal) || (!wants_internal && is_public))
+            {
+              strncpy(storage_url, json_object_get_string(url), sizeof(storage_url));
+              break;
+            }
+          }
+          free(ep);
         }
       }
       json_object_put(json);
