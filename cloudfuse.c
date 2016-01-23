@@ -378,6 +378,7 @@ static int cfs_statfs(const char *path, struct statvfs *stat)
   stat->f_ffree = INT_MAX;
   stat->f_favail = INT_MAX;
   stat->f_namemax = INT_MAX;
+  cloudfs_tenant_info(stat);
   return 0;
 }
 

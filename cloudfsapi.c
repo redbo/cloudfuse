@@ -4,6 +4,7 @@
 #include <stdarg.h>
 #include <stdlib.h>
 #include <sys/stat.h>
+#include <sys/statvfs.h>
 #ifdef __linux__
 #include <alloca.h>
 #endif
@@ -26,6 +27,7 @@
 
 static char storage_url[MAX_URL_SIZE];
 static char storage_token[MAX_HEADER_SIZE];
+static char storage_space_used[32];
 static pthread_mutex_t pool_mut;
 static CURL *curl_pool[1024];
 static int curl_pool_count = 0;
@@ -169,6 +171,26 @@ static void add_header(curl_slist **headers, const char *name,
   *headers = curl_slist_append(*headers, x_header);
 }
 
+static size_t header_dispatch(void *ptr, size_t size, size_t nmemb, void *stream)
+{
+  char *header = (char *)alloca(size * nmemb + 1);
+  char *head = (char *)alloca(size * nmemb + 1);
+  char *value = (char *)alloca(size * nmemb + 1);
+  memcpy(header, (char *)ptr, size * nmemb);
+  header[size * nmemb] = '\0';
+  if (sscanf(header, "%[^:]: %[^\r\n]", head, value) == 2)
+  {
+    if (!strncasecmp(head, "x-auth-token", size * nmemb) ||
+        !strncasecmp(head, "x-subject-token", size * nmemb))
+      strncpy(storage_token, value, sizeof(storage_token));
+    if (!strncasecmp(head, "x-storage-url", size * nmemb))
+      strncpy(storage_url, value, sizeof(storage_url));
+    if (!strncasecmp(head, "x-account-bytes-used", size * nmemb))
+      strncpy(storage_space_used, value, sizeof(storage_space_used));
+  }
+  return size * nmemb;
+}
+
 static int send_request(char *method, const char *path, FILE *fp,
                         xmlParserCtxtPtr xmlctx, curl_slist *extra_headers)
 {
@@ -240,6 +262,11 @@ static int send_request(char *method, const char *path, FILE *fp,
         curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, &xml_dispatch);
       }
     }
+    else if (!strcasecmp(method, "HEAD"))
+    {
+      curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, method);
+      curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, &header_dispatch);
+    }
     else
       curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, method);
     /* add the headers from extra_headers if any */
@@ -264,24 +291,6 @@ static int send_request(char *method, const char *path, FILE *fp,
       xmlCtxtResetPush(xmlctx, NULL, 0, NULL, NULL);
   }
   return response;
-}
-
-static size_t header_dispatch(void *ptr, size_t size, size_t nmemb, void *stream)
-{
-  char *header = (char *)alloca(size * nmemb + 1);
-  char *head = (char *)alloca(size * nmemb + 1);
-  char *value = (char *)alloca(size * nmemb + 1);
-  memcpy(header, (char *)ptr, size * nmemb);
-  header[size * nmemb] = '\0';
-  if (sscanf(header, "%[^:]: %[^\r\n]", head, value) == 2)
-  {
-    if (!strncasecmp(head, "x-auth-token", size * nmemb) ||
-        !strncasecmp(head, "x-subject-token", size * nmemb))
-      strncpy(storage_token, value, sizeof(storage_token));
-    if (!strncasecmp(head, "x-storage-url", size * nmemb))
-      strncpy(storage_url, value, sizeof(storage_url));
-  }
-  return size * nmemb;
 }
 
 /*
@@ -320,6 +329,18 @@ void cloudfs_init()
     // allow https to continue working after forking (for RHEL/CentOS 6)
     setenv("NSS_STRICT_NOFORK", "DISABLED", 1);
   }
+}
+
+int cloudfs_tenant_info(struct statvfs *stat)
+{
+  int response = send_request("HEAD", "", NULL, NULL, NULL);
+  if (response == 204)
+  {
+    fsblkcnt_t space_used = atol(storage_space_used) / stat->f_frsize;
+    stat->f_bfree = stat->f_bavail = stat->f_blocks - space_used;
+    return 1;
+  }
+  return 0;
 }
 
 int cloudfs_object_read_fp(const char *path, FILE *fp)
