@@ -378,6 +378,7 @@ static int cfs_statfs(const char *path, struct statvfs *stat)
   stat->f_ffree = INT_MAX;
   stat->f_favail = INT_MAX;
   stat->f_namemax = INT_MAX;
+  cloudfs_tenant_info(stat);
   return 0;
 }
 
@@ -449,6 +450,7 @@ int parse_option(void *data, const char *arg, int key, struct fuse_args *outargs
   if (sscanf(arg, " username = %[^\r\n ]", options.username) ||
       sscanf(arg, " tenant = %[^\r\n ]", options.tenant) ||
       sscanf(arg, " api_key = %[^\r\n ]", options.password) ||
+      sscanf(arg, " auth_url = %[^\r\n ]", options.authurl) ||
       sscanf(arg, " password = %[^\r\n ]", options.password) ||
       sscanf(arg, " cache_timeout = %[^\r\n ]", options.cache_timeout) ||
       sscanf(arg, " authurl = %[^\r\n ]", options.authurl) ||
