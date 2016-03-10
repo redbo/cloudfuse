@@ -92,6 +92,30 @@ EXAMPLE:
         password=supersecret
         authurl=http://10.10.0.1:5000/v2.0
 
+DEBUGGING:
+    Cloudfuse may demonstrate the following symptoms:
+        - console locks up for minutes
+        - error message "Link has been severed"
+        
+    You can debug these situations in two ways:
+        (1) Look at /var/log/syslog or /var/log/messages on your swift server
+        (2) Use the -d, -f, or debug flag in your cloudfuse config and watch
+            the logs or console for errors.
+        
+    Frequently, these are network or certificate errors.  Swift may not log 
+    certificate failures, so the debug switch is important if you're using
+    cloudfuse for the first time, particularly in a non-Rackspace environment.
+    
+    e.g. * Peer certificate cannot be authenticated with given CA certificates
+         * About to connect() to 192.168.0.2 port 8080 (#0)
+         *   Trying 192.168.0.2... * connected
+         * successfully set certificate verify locations:
+         *   CAfile: none
+           CApath: /etc/ssl/certs
+         * SSL certificate problem, verify that the CA cert is OK. Details:
+         error:14090086:SSL routines:SSL3_GET_SERVER_CERTIFICATE:certificate verify failed
+         * Closing connection #0
+
 
 BUGS/SHORTCOMINGS:
 
