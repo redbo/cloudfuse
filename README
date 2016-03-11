@@ -19,7 +19,7 @@ BUILDING:
     packages) installed to build it.  From a base Debian or Ubuntu install,
     this should get you to a point you can build and run it:
         apt-get install build-essential libcurl4-openssl-dev libxml2-dev \
-             libssl-dev libfuse-dev
+             libssl-dev libfuse-dev libjson-c-dev
 
     For CentOS or similar,
         yum install gcc make fuse-devel curl-devel libxml2-devel openssl-devel
