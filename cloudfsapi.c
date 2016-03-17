@@ -623,38 +623,28 @@ int cloudfs_connect()
 
   if (reconnect_args.auth_version == 2)
   {
-    if (reconnect_args.username[0] && reconnect_args.tenant[0] && reconnect_args.password[0])
-    {
-      snprintf(postdata, sizeof(postdata), "<?xml version=\"1.0\" encoding"
-          "=\"UTF-8\"?><auth xmlns=\"http://docs.openstack.org/identity/ap"
-          "i/v2.0\" tenantName=\"%s\"><passwordCredentials username=\"%s\""
-          " password=\"%s\"/></auth>", reconnect_args.tenant,
-          reconnect_args.username, reconnect_args.password);
-    }
-    else if (reconnect_args.username[0] && reconnect_args.password[0])
-    {
-      snprintf(postdata, sizeof(postdata), "<?xml version=\"1.0\" encoding"
-          "=\"UTF-8\"?><auth><apiKeyCredentials xmlns=\"http://docs.racksp"
-          "ace.com/identity/api/ext/RAX-KSKEY/v1.0\" username=\"%s\" apiKe"
-          "y=\"%s\"/></auth>", reconnect_args.username, reconnect_args.password);
-    }
-    else
-    {
-      debugf("Unable to determine auth scheme.");
-      abort();
+    if (!reconnect_args.tenant[0]) {
+      snprintf(postdata, sizeof(postdata), "{\"auth\":{\"RAX-KSKEY:apiKeyCre"
+        "dentials\":{\"username\":\"%s\",\"apiKey\":\"%s\"}}}",
+        reconnect_args.username, reconnect_args.password);
+    } else {
+      snprintf(postdata, sizeof(postdata), "{\"auth\":{\"tenantName\":\"%s\","
+        "\"passwordCredentials\":{\"username\":\"%s\",\"password\":\"%s\"}}}",
+        reconnect_args.tenant, reconnect_args.username,
+        reconnect_args.password);
     }
     debugf("%s", postdata);
 
-    add_header(&headers, "Content-Type", "application/xml");
-    add_header(&headers, "Accept", "application/xml");
+    add_header(&headers, "Content-Type", "application/json");
+    add_header(&headers, "Accept", "application/json");
 
     curl_easy_setopt(curl, CURLOPT_POST, 1);
     curl_easy_setopt(curl, CURLOPT_POSTFIELDS, postdata);
     curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, strlen(postdata));
-
-    xmlctx = xmlCreatePushParserCtxt(NULL, NULL, "", 0, NULL);
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, xmlctx);
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, &xml_dispatch);
+    curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, &header_dispatch);
+    json_payload = (struct json_payload *) calloc(1, sizeof(struct json_payload));
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, json_payload);
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, &json_dispatch);
   }
   else if (reconnect_args.auth_version == 3)
   {
@@ -710,70 +700,71 @@ int cloudfs_connect()
   curl_slist_free_all(headers);
   curl_easy_cleanup(curl);
 
-  if (reconnect_args.auth_version == 2)
+  if (reconnect_args.auth_version == 2 && json_payload)
   {
-    xmlParseChunk(xmlctx, "", 0, 1);
-    if (xmlctx->wellFormed && response >= 200 && response < 300)
+    json = json_tokener_parse_verbose(json_payload->data, &json_err);
+    free(json_payload->data);
+    free(json_payload);
+    if (!reconnect_args.region[0])
     {
-      xmlXPathContextPtr xpctx = xmlXPathNewContext(xmlctx->myDoc);
-      xmlXPathRegisterNs(xpctx, "id", "http://docs.openstack.org/identity/api/v2.0");
-      xmlXPathObjectPtr obj;
-
-      /* Determine default region if not configured */
-      if (!reconnect_args.region[0])
+      json_object *access, *user, *default_region;
+      if (json_object_object_get_ex(json, "access", &access) &&
+          json_object_object_get_ex(access, "user", &user) &&
+          json_object_object_get_ex(user, "RAX-AUTH:defaultRegion", &default_region))
       {
-        obj = xmlXPathEval("/id:access/id:user", xpctx);
-        if (obj && obj->nodesetval && obj->nodesetval->nodeNr > 0)
+        strncpy(reconnect_args.region, json_object_get_string(default_region), sizeof(reconnect_args.region));
+      }
+    }
+    json_object *access, *service_catalog, *token, *id;
+    if (json_object_object_get_ex(json, "access", &access) &&
+        json_object_object_get_ex(access, "token", &token) &&
+        json_object_object_get_ex(token, "id", &id))
+    {
+      strncpy(storage_token, json_object_get_string(id), sizeof(storage_token));
+    }
+    if (json_object_object_get_ex(json, "access", &access) &&
+        json_object_object_get_ex(access, "serviceCatalog", &service_catalog))
+    {
+      int i, entries = json_object_array_length(service_catalog);
+      for (i = 0; i < entries; i++)
+      {
+        json_object *type, *catalog_entry = json_object_array_get_idx(service_catalog, i);
+        if (json_object_object_get_ex(catalog_entry, "type", &type))
         {
-          xmlChar *default_region = xmlGetProp(obj->nodesetval->nodeTab[0], "defaultRegion");
-          if (default_region && *default_region)
+          const char *type_name = json_object_get_string(type);
+          if (!strcmp(type_name, "object-store"))
           {
-            strncpy(reconnect_args.region, default_region, sizeof(reconnect_args.region));
-            xmlFree(default_region);
+            json_object *endpoints;
+            if (json_object_object_get_ex(catalog_entry, "endpoints", &endpoints))
+            {
+              int i, entries = json_object_array_length(endpoints);
+              for (i = 0; i < entries; i++)
+              {
+                json_object *url, *region, *endpoint = json_object_array_get_idx(endpoints, i);
+                if (json_object_object_get_ex(endpoint, "region", &region))
+                {
+                  const char *region_name = json_object_get_string(region);
+                  if (reconnect_args.region[0] == 0 ||
+                      !strncmp(region_name, reconnect_args.region, sizeof(reconnect_args.region)))
+                  {
+                    if (reconnect_args.use_snet &&
+                        json_object_object_get_ex(endpoint, "internalURL", &url))
+                    {
+                      strncpy(storage_url, json_object_get_string(url), sizeof(storage_url));
+                    } else if (json_object_object_get_ex(endpoint, "publicURL", &url)) {
+                      strncpy(storage_url, json_object_get_string(url), sizeof(storage_url));
+                    }
+                  }
+                }
+              }
+            }
           }
         }
-        xmlXPathFreeNodeSetList(obj);
       }
-      debugf("Using region: %s", reconnect_args.region);
-
-      if (reconnect_args.region[0])
-      {
-        char path[1024];
-        snprintf(path, sizeof(path), "/id:access/id:serviceCatalog/id:service"
-            "[@type='object-store']/id:endpoint[@region='%s']",
-            reconnect_args.region);
-        obj = xmlXPathEval(path, xpctx);
-      }
-      else
-        obj = xmlXPathEval("/id:access/id:serviceCatalog/id:service"
-            "[@type='object-store']/id:endpoint", xpctx);
-      if (obj->nodesetval && obj->nodesetval->nodeNr > 0)
-      {
-        xmlChar *url;
-        if (reconnect_args.use_snet)
-          url = xmlGetProp(obj->nodesetval->nodeTab[0], "internalURL");
-        else
-          url = xmlGetProp(obj->nodesetval->nodeTab[0], "publicURL");
-        strncpy(storage_url, url, sizeof(storage_url));
-        xmlFree(url);
-      }
-      else
-        debugf("Unable to find endpoint");
-      xmlXPathFreeNodeSetList(obj);
-
-      obj = xmlXPathEval("/id:access/id:token", xpctx);
-      if (obj->nodesetval && obj->nodesetval->nodeNr > 0)
-      {
-        xmlChar *token_id = xmlGetProp(obj->nodesetval->nodeTab[0], "id");
-        strncpy(storage_token, token_id, sizeof(storage_token));
-        xmlFree(token_id);
-      }
-      xmlXPathFreeNodeSetList(obj);
-      xmlXPathFreeContext(xpctx);
-      debugf("storage_url: %s", storage_url);
-      debugf("storage_token: %s", storage_token);
     }
-    xmlFreeParserCtxt(xmlctx);
+    json_object_put(json);
+    debugf("storage_url: %s", storage_url);
+    debugf("storage_token: %s", storage_token);
   }
   else if (reconnect_args.auth_version == 3)
   {
