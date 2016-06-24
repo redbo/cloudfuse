@@ -611,8 +611,6 @@ int cloudfs_connect()
   curl_slist *headers = NULL;
   CURL *curl = curl_easy_init();
   char postdata[8192] = "";
-  xmlNode *top_node = NULL, *service_node = NULL, *endpoint_node = NULL;
-  xmlParserCtxtPtr xmlctx = NULL;
   enum json_tokener_error json_err = json_tokener_success;
   struct json_payload *json_payload = NULL;
   json_object *json = NULL;
