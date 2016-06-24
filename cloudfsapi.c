@@ -755,6 +755,19 @@ int cloudfs_connect()
                   }
                 }
               }
+              if (strlen(storage_url) == 0)
+              {
+                debugf("Unable to find endpoint for region: %s", reconnect_args.region);
+                for (i = 0; i < entries; i++)
+                {
+                  json_object *region, *endpoint = json_object_array_get_idx(endpoints, i);
+                  if (json_object_object_get_ex(endpoint, "region", &region))
+                  {
+                    const char *region_name = json_object_get_string(region);
+                    debugf("valid region: %s", region_name);
+                  }
+                }
+              }
             }
           }
         }
