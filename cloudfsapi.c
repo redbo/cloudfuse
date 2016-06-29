@@ -19,6 +19,7 @@
 #include <json-c/json.h>
 #include "cloudfsapi.h"
 #include "config.h"
+#include "headerspec.h"
 
 #define RHEL5_LIBCURL_VERSION 462597
 #define RHEL5_CERTIFICATE_FILE "/etc/pki/tls/certs/ca-bundle.crt"
@@ -34,6 +35,7 @@ static int curl_pool_count = 0;
 static int debug = 0;
 static int verify_ssl = 1;
 static int rhel5_mode = 0;
+static header_spec *hspec;
 
 struct json_payload {
   char *data;
@@ -163,9 +165,10 @@ static void return_connection(CURL *curl)
   pthread_mutex_unlock(&pool_mut);
 }
 
-static void add_header(curl_slist **headers, const char *name,
-                       const char *value)
+void add_header(curl_slist **headers, const char *name,
+		const char *value)
 {
+  debugf("Adding the header %s: %s",name,value);
   char x_header[MAX_HEADER_SIZE];
   snprintf(x_header, sizeof(x_header), "%s: %s", name, value);
   *headers = curl_slist_append(*headers, x_header);
@@ -349,8 +352,11 @@ int cloudfs_object_read_fp(const char *path, FILE *fp)
   fflush(fp);
   rewind(fp);
   char *encoded = curl_escape(path, 0);
-  int response = send_request("PUT", encoded, fp, NULL, NULL);
+  curl_slist *headers = NULL;
+  add_matching_headers(&headers,hspec,path);
+  int response = send_request("PUT", encoded, fp, NULL, headers);
   curl_free(encoded);
+  curl_slist_free_all(headers);
   return (response >= 200 && response < 300);
 }
 
@@ -603,6 +609,11 @@ void cloudfs_set_credentials(char *username, char *tenant, char *password,
   else
     reconnect_args.auth_version = 1;
   reconnect_args.use_snet = use_snet;
+}
+
+void cloudfs_set_header_spec(header_spec *spec)
+{
+  hspec = spec;
 }
 
 int cloudfs_connect()

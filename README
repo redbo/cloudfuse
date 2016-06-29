@@ -117,6 +117,40 @@ DEBUGGING:
          * Closing connection #0
 
 
+HEADER SPECIFICATIONS:
+
+    The option headers_spec option allows to specify headers to send
+    when a file is written.  A common use is to specify the
+    Content-Type header.  Rackspace's CloudFiles, for example, allows
+    14 different headers for specifying access controls, content
+    expiration, and content encoding.  Cloudfuse doesn't restrict what
+    headers can be specified.
+
+    The header value is set based on matching a path against a list of
+    globs.  The syntax:
+
+      HeaderKey: [!]GlobMatch HeaderValue [, [!]GlobMatch HeaderValue...] [; HeaderKey:...]
+
+    Here's an example which sets the Content-Type header:
+
+      Content-Type: /foobucket/*.html text/html, "/*/my dir/*.txt" text/plain;
+
+    If no pattern matches, then the header is omitted.  Note that
+    double quotes can be used to specify a pattern that has spaces.  A
+    match pattern preceded by ! is negated, so that the header is
+    applied when the path does not match the glob pattern.  Multiple
+    headers can be specified, separated by semicolon (;) More examples
+    are available in the test directory.
+
+    See 'man 3 fnmatch' for accepted glob patterns.
+
+    The path looks like an absolute path beginning at the mount point.
+    For example, a file "index.html" in bucket "foo" will result in
+    the string "/foo/index.html" being matched against the glob
+    pattern (even if the absolute path on your system is actually
+    /var/www/foo/index.html).
+
+
 BUGS/SHORTCOMINGS:
 
     * rename() doesn't work on directories (and probably never will).
@@ -142,7 +176,7 @@ AWESOME CONTRIBUTORS:
     * David Brownlee                               https://github.com/abs0
     * Mike Lundy                                   https://github.com/novas0x2a
     * justinb                                      https://github.com/justinsb
-
+    * Erik Mackdanz                                http://mackdanz.net
 
 Thanks, and I hope you find it useful.
 

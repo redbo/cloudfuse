@@ -6,7 +6,13 @@ config.status
 
 # Binary outputs
 cloudfuse
+test/specrunner
 
 # Ignore Eclipse files
 .cproject
 .project
+
+# Misc dev files
+TAGS
+**/*~
+
