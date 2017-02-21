@@ -434,6 +434,7 @@ static struct options {
     char region[OPTION_SIZE];
     char use_snet[OPTION_SIZE];
     char verify_ssl[OPTION_SIZE];
+    char prefix[OPTION_SIZE];
 } options = {
     .username = "",
     .password = "",
@@ -443,6 +444,7 @@ static struct options {
     .region = "",
     .use_snet = "false",
     .verify_ssl = "true",
+    .prefix = ""
 };
 
 int parse_option(void *data, const char *arg, int key, struct fuse_args *outargs)
@@ -456,7 +458,8 @@ int parse_option(void *data, const char *arg, int key, struct fuse_args *outargs
       sscanf(arg, " authurl = %[^\r\n ]", options.authurl) ||
       sscanf(arg, " region = %[^\r\n ]", options.region) ||
       sscanf(arg, " use_snet = %[^\r\n ]", options.use_snet) ||
-      sscanf(arg, " verify_ssl = %[^\r\n ]", options.verify_ssl))
+      sscanf(arg, " verify_ssl = %[^\r\n ]", options.verify_ssl) ||
+      sscanf(arg, " prefix = %[^\r\n ]", options.prefix))
     return 0;
   if (!strcmp(arg, "-f") || !strcmp(arg, "-d") || !strcmp(arg, "debug"))
     cloudfs_debug(1);
@@ -496,6 +499,7 @@ int main(int argc, char **argv)
     fprintf(stderr, "  use_snet=[True to use Rackspace ServiceNet for connections]\n");
     fprintf(stderr, "  cache_timeout=[Seconds for directory caching, default 600]\n");
     fprintf(stderr, "  verify_ssl=[False to disable SSL cert verification]\n");
+    fprintf(stderr, "  prefix=[show files starting with prefix]\n");
 
     return 1;
   }
@@ -503,6 +507,8 @@ int main(int argc, char **argv)
   cloudfs_init();
 
   cloudfs_verify_ssl(!strcasecmp(options.verify_ssl, "true"));
+
+  cloudfs_set_prefix(options.prefix);
 
   cloudfs_set_credentials(options.username, options.tenant, options.password,
                           options.authurl, options.region,
