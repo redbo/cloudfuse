@@ -34,6 +34,7 @@ static int curl_pool_count = 0;
 static int debug = 0;
 static int verify_ssl = 1;
 static int rhel5_mode = 0;
+static char gprefix[1024] = "";
 
 struct json_payload {
   char *data;
@@ -419,8 +420,8 @@ int cloudfs_list_directory(const char *path, dir_entry **dir_list)
       prefix_length++;
     }
 
-    snprintf(container, sizeof(container), "%s?format=xml&delimiter=/&prefix=%s%s",
-              encoded_container, encoded_object, trailing_slash);
+    snprintf(container, sizeof(container), "%s?format=xml&delimiter=/&prefix=%s%s%s",
+              encoded_container, encoded_object, trailing_slash,gprefix);
     curl_free(encoded_container);
     curl_free(encoded_object);
   }
@@ -448,6 +449,7 @@ int cloudfs_list_directory(const char *path, dir_entry **dir_list)
         de->last_modified = time(NULL);
         if (is_container || is_subdir)
           de->content_type = strdup("application/directory");
+          else de->content_type = NULL;
         for (anode = onode->children; anode; anode = anode->next)
         {
           char *content = "<?!?>";
@@ -563,6 +565,11 @@ off_t cloudfs_file_size(int fd)
 void cloudfs_debug(int dbg)
 {
   debug = dbg;
+}
+
+void cloudfs_set_prefix(char *p)
+{
+  memcpy(&gprefix,p,1024);
 }
 
 void cloudfs_verify_ssl(int vrfy)

@@ -39,6 +39,7 @@ off_t cloudfs_file_size(int fd);
 void cloudfs_debug(int dbg);
 void cloudfs_verify_ssl(int dbg);
 void cloudfs_free_dir_list(dir_entry *dir_list);
+void cloudfs_set_prefix(char *p);
 
 void debugf(char *fmt, ...);
 #endif
